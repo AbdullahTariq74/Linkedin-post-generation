@@ -1,0 +1,422 @@
+{
+  "name": "Weekly Content Ideas Refill",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 20 * * 0"
+            }
+          ]
+        }
+      },
+      "id": "ccc00001-0000-4000-8000-000000000001",
+      "name": "Every Sunday 8pm",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build one item per category — each will be processed by Tavily + Claude\nconst year = new Date().getFullYear();\n\nconst categories = [\n  {\n    category: 'Automation Tip',\n    day: 'Monday',\n    trendQuery: `n8n Make.com Zapier automation workflow tip trick latest ${year}`,\n    direction: 'A specific actionable automation tip, node trick, or workflow pattern that saves real time'\n  },\n  {\n    category: 'Tool Spotlight',\n    day: 'Tuesday',\n    trendQuery: `n8n Make.com Vapi Retell AI LangChain Claude tool update release ${year}`,\n    direction: 'A specific AI or automation tool — honest take on what it does, pros/cons, when to use it'\n  },\n  {\n    category: 'AI & Automation News',\n    day: 'Wednesday',\n    trendQuery: `n8n Make.com AI automation business news trending ${year}`,\n    direction: 'A real trend or news item in AI automation — what it means practically for businesses'\n  },\n  {\n    category: 'Did You Know?',\n    day: 'Thursday',\n    trendQuery: `n8n Make.com automation workflow surprising fact statistic ${year}`,\n    direction: 'A surprising, counterintuitive, or overlooked fact about automation or AI workflows'\n  },\n  {\n    category: 'Use Case',\n    day: 'Friday',\n    trendQuery: `n8n Make.com AI automation business use case ROI result ${year}`,\n    direction: 'A specific automation or AI workflow a real business type could use to save time or make money'\n  },\n  {\n    category: 'Personal Brand',\n    day: 'Saturday',\n    trendQuery: `freelance AI automation engineer career n8n Make.com ${year}`,\n    direction: 'A personal insight about building a freelance AI career, mindset, or lessons learned'\n  }\n];\n\nconsole.log(`Building ideas for ${categories.length} categories`);\nreturn categories.map(c => ({ json: c }));"
+      },
+      "id": "ccc00001-0000-4000-8000-000000000002",
+      "name": "Build Category List",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.tavily.com/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ JSON.stringify({\n  api_key: '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',\n  query: $json.trendQuery,\n  search_depth: 'basic',\n  max_results: 6,\n  include_answer: false,\n  days: 7\n}) }",
+        "options": {}
+      },
+      "id": "ccc00001-0000-4000-8000-000000000003",
+      "name": "Tavily Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combine category context with Tavily results for Claude\nconst trendData = $input.first().json;\nconst category = $('Build Category List').item.json.category;\nconst direction = $('Build Category List').item.json.direction;\nconst day = $('Build Category List').item.json.day;\nconst year = new Date().getFullYear();\n\n// Format Tavily results\nlet trendSummary = '';\ntry {\n  if (trendData.results && Array.isArray(trendData.results)) {\n    trendSummary = trendData.results.slice(0, 5).map((r, i) =>\n      `[${i+1}] ${r.title}\\n${(r.content || '').slice(0, 300)}`\n    ).join('\\n\\n');\n  }\n} catch(e) {\n  console.log('Tavily parse error:', e.message);\n}\n\nreturn [{ json: { category, direction, day, year, trendSummary: trendSummary || 'No results' }}];"
+      },
+      "id": "ccc00001-0000-4000-8000-000000000004",
+      "name": "Prepare Claude Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "PASTE_YOUR_CLAUDE_API_KEY_HERE"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-haiku-4-5-20251001\",\n  \"max_tokens\": 800,\n  \"messages\": [{\n    \"role\": \"user\",\n    \"content\": \"You help Abdullah Tariq — an AI automation engineer at Trilles AI — plan LinkedIn content.\\n\\nCategory: \" + $json.category + \"\\nDay: \" + $json.day + \"\\nContent direction: \" + $json.direction + \"\\n\\nHere are trending topics from this week:\\n\\n\" + $json.trendSummary + \"\\n\\nGenerate 2 content ideas for this category. Each idea should:\\n- Be based on something from the trending results above (pick what would make the strongest LinkedIn post)\\n- Have a specific, concrete angle — not vague\\n- Be practical and relevant to AI automation / small business owners\\n- Feel fresh and timely, not generic\\n\\nReturn ONLY this JSON array (no explanation):\\n[\\n  {\\n    \\\"title\\\": \\\"Specific post title (8-12 words max)\\\",\\n    \\\"angle\\\": \\\"The specific angle, what to include, why it's interesting right now (2-3 sentences)\\\",\\n    \\\"priority\\\": \\\"High or Medium\\\"\\n  },\\n  {\\n    \\\"title\\\": \\\"...\\\",\\n    \\\"angle\\\": \\\"...\\\",\\n    \\\"priority\\\": \\\"...\\\"\\n  }\\n]\"\n  }]\n}"
+      },
+      "id": "ccc00001-0000-4000-8000-000000000005",
+      "name": "Claude Generate Ideas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Claude's ideas and format as Content Ideas sheet rows\nconst response = $input.first().json;\nconst category = $('Build Category List').item.json.category;\nconst today = new Date().toISOString().split('T')[0];\n\nlet ideas = [];\ntry {\n  const text = response.content[0].text;\n  const cleaned = text.replace(/^```json\\s*/i, '').replace(/```\\s*$/i, '').trim();\n  ideas = JSON.parse(cleaned);\n} catch(e) {\n  console.log(`Failed to parse Claude response for ${category}:`, e.message);\n  // Return empty — this category will be skipped\n  return [];\n}\n\nconsole.log(`${category}: parsed ${ideas.length} ideas`);\n\nreturn ideas.map(idea => ({\n  json: {\n    'Date Added': today,\n    'Idea Title': idea.title || '',\n    'Category': category,\n    'Full Idea / Angle': idea.angle || '',\n    'Priority': idea.priority || 'Medium',\n    'Status': 'Unused',\n    'Notes': `Auto-generated ${today}`\n  }\n}));"
+      },
+      "id": "ccc00001-0000-4000-8000-000000000006",
+      "name": "Parse Ideas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "allIdeas",
+        "options": {}
+      },
+      "id": "ccc00001-0000-4000-8000-000000000007",
+      "name": "Aggregate All Ideas",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        1320,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Flatten aggregated ideas into individual rows\nconst allIdeas = $input.first().json.allIdeas || [];\n\nconst rows = [];\nfor (const item of allIdeas) {\n  if (item['Idea Title']) {\n    rows.push({ json: item });\n  }\n}\n\nconsole.log(`Total ideas to write: ${rows.length}`);\nif (rows.length === 0) throw new Error('No ideas generated — check Tavily and Claude nodes');\n\nreturn rows;"
+      },
+      "id": "ccc00001-0000-4000-8000-000000000008",
+      "name": "Flatten Ideas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1IwKjyPCJ0tGpFpRceUxQwGACf9Uk0IZoSsoXqJyAAjY",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "💡 Content Ideas",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date Added": "={{ $json['Date Added'] }}",
+            "Idea Title": "={{ $json['Idea Title'] }}",
+            "Category": "={{ $json['Category'] }}",
+            "Full Idea / Angle": "={{ $json['Full Idea / Angle'] }}",
+            "Priority": "={{ $json['Priority'] }}",
+            "Status": "={{ $json['Status'] }}",
+            "Notes": "={{ $json['Notes'] }}"
+          },
+          "matchingColumns": []
+        },
+        "options": {}
+      },
+      "id": "ccc00001-0000-4000-8000-000000000009",
+      "name": "Write to Content Ideas",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [
+        1760,
+        300
+      ],
+      "credentials": {
+        "googleApi": {
+          "id": "IsKwAiku6jrE5n03",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build the weekly ideas summary email HTML\nconst rows = $input.all();\nconst today = new Date().toISOString().split('T')[0];\n\n// Group by category\nconst byCategory = {};\nfor (const row of rows) {\n  const cat = row.json['Category'] || 'Other';\n  if (!byCategory[cat]) byCategory[cat] = [];\n  byCategory[cat].push(row.json);\n}\n\nconst categoryColors = {\n  'Automation Tip':       '#6366f1',\n  'Tool Spotlight':       '#0ea5e9',\n  'AI & Automation News': '#f59e0b',\n  'Did You Know?':        '#10b981',\n  'Use Case':             '#ef4444',\n  'Personal Brand':       '#8b5cf6'\n};\n\nlet tableRows = '';\nfor (const [cat, ideas] of Object.entries(byCategory)) {\n  const color = categoryColors[cat] || '#6b7280';\n  for (const idea of ideas) {\n    tableRows += `\n    <tr>\n      <td style=\"padding:10px 8px; border-bottom:1px solid #f3f4f6;\">\n        <span style=\"background:${color}20; color:${color}; padding:2px 8px; border-radius:4px; font-size:12px; font-weight:600;\">${cat}</span>\n      </td>\n      <td style=\"padding:10px 8px; border-bottom:1px solid #f3f4f6; font-weight:500;\">${idea['Idea Title']}</td>\n      <td style=\"padding:10px 8px; border-bottom:1px solid #f3f4f6; color:#6b7280; font-size:13px;\">${idea['Full Idea / Angle']}</td>\n      <td style=\"padding:10px 8px; border-bottom:1px solid #f3f4f6; text-align:center;\">\n        <span style=\"color:${idea['Priority']==='High'?'#ef4444':'#f59e0b'}; font-weight:600; font-size:13px;\">${idea['Priority']}</span>\n      </td>\n    </tr>`;\n  }\n}\n\nconst html = `\n<div style=\"font-family:Arial,sans-serif; max-width:800px; margin:0 auto; padding:24px; color:#111;\">\n  <h2 style=\"color:#1a1f3a; border-bottom:3px solid #6366f1; padding-bottom:10px;\">\n    Weekly Content Ideas — ${rows.length} ideas queued for next week\n  </h2>\n  <p style=\"color:#6b7280;\">These have been added to your <a href=\"https://docs.google.com/spreadsheets/d/1IwKjyPCJ0tGpFpRceUxQwGACf9Uk0IZoSsoXqJyAAjY\">Content Ideas sheet</a>.\n  Review them below — delete any you don't want posted.</p>\n\n  <table style=\"width:100%; border-collapse:collapse; margin-top:16px;\">\n    <thead>\n      <tr style=\"background:#f8fafc;\">\n        <th style=\"padding:10px 8px; text-align:left; font-size:13px; color:#6b7280; width:150px;\">Category</th>\n        <th style=\"padding:10px 8px; text-align:left; font-size:13px; color:#6b7280;\">Topic</th>\n        <th style=\"padding:10px 8px; text-align:left; font-size:13px; color:#6b7280;\">Angle</th>\n        <th style=\"padding:10px 8px; text-align:left; font-size:13px; color:#6b7280; width:70px;\">Priority</th>\n      </tr>\n    </thead>\n    <tbody>${tableRows}</tbody>\n  </table>\n\n  <div style=\"background:#f0fdf4; border:1px solid #86efac; border-radius:8px; padding:16px; margin-top:24px; font-size:14px;\">\n    <strong>What to do:</strong><br>\n    1. Review the ideas above<br>\n    2. Open <a href=\"https://docs.google.com/spreadsheets/d/1IwKjyPCJ0tGpFpRceUxQwGACf9Uk0IZoSsoXqJyAAjY\">Content Ideas sheet</a> → delete any rows you don't like<br>\n    3. Change Priority to <strong>High</strong> for ones you want posted first<br>\n    4. The daily workflow picks from these automatically all week\n  </div>\n\n  <p style=\"color:#d1d5db; font-size:11px; margin-top:24px;\">Generated by your n8n weekly workflow · Trilles AI</p>\n</div>`;\n\nreturn [{ json: { html, count: rows.length, date: today } }];"
+      },
+      "id": "ccc00001-0000-4000-8000-000000000010",
+      "name": "Build Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "abdtariq3274@gmail.com",
+        "subject": "=Weekly Content Ideas Ready — {{ $json.count }} ideas for next week",
+        "message": "={{ $json.html }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "ccc00001-0000-4000-8000-000000000011",
+      "name": "Send Summary Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        2200,
+        300
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "Y9KIuO9pMES0OtnB",
+          "name": "Gmail--Personal"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const count = $('Build Email').first().json.count;\nconsole.log(`Weekly ideas refill complete. ${count} ideas written to Content Ideas sheet.`);\nreturn [{ json: { status: 'done', ideasGenerated: count } }];"
+      },
+      "id": "ccc00001-0000-4000-8000-000000000012",
+      "name": "Done",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2420,
+        300
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "ccc00001-0000-4000-8000-000000000099",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "abdtariq3274@gmail.com",
+        "subject": "=[ERROR] Weekly Ideas Refill Failed",
+        "message": "=<h2 style='color:red;'>Weekly ideas workflow failed</h2><p><strong>Error:</strong> {{ $json.execution.error.message }}</p><p><strong>Node:</strong> {{ $json.execution.lastNode }}</p><p>Content Ideas sheet may not have been updated this week.</p>",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "ccc00001-0000-4000-8000-000000000098",
+      "name": "Error Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        220,
+        560
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "Y9KIuO9pMES0OtnB",
+          "name": "Gmail--Personal"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every Sunday 8pm": {
+      "main": [
+        [
+          {
+            "node": "Build Category List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Category List": {
+      "main": [
+        [
+          {
+            "node": "Tavily Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tavily Search": {
+      "main": [
+        [
+          {
+            "node": "Prepare Claude Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Claude Input": {
+      "main": [
+        [
+          {
+            "node": "Claude Generate Ideas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Generate Ideas": {
+      "main": [
+        [
+          {
+            "node": "Parse Ideas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Ideas": {
+      "main": [
+        [
+          {
+            "node": "Aggregate All Ideas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate All Ideas": {
+      "main": [
+        [
+          {
+            "node": "Flatten Ideas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Flatten Ideas": {
+      "main": [
+        [
+          {
+            "node": "Write to Content Ideas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write to Content Ideas": {
+      "main": [
+        [
+          {
+            "node": "Build Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Email": {
+      "main": [
+        [
+          {
+            "node": "Send Summary Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Summary Email": {
+      "main": [
+        [
+          {
+            "node": "Done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Error Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "id": "weekly-ideas-refill-001"
+}

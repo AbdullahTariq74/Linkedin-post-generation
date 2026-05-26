@@ -1,0 +1,28 @@
+# Credentials — NEVER commit these
+service_account.json
+*credentials*.json
+*secret*.json
+Google Sheets API.json
+.env
+*.env
+
+# Personal assets
+*.MOV
+*.mp4
+Abdullah.png
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# n8n local data
+.n8n/

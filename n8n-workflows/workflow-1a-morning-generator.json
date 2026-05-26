@@ -1,0 +1,1657 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "// Format the Kie AI API request body\nconst imagePrompt = $input.first().json.imagePrompt || 'Abstract tech visualization, dark background, no text';\n\nconst requestBody = {\n  model: 'google/nano-banana',\n  input: {\n    prompt: imagePrompt,\n    output_format: 'png',\n    image_size: '16:9'\n  }\n};\n\nconsole.log(`Kie request — prompt: \"${imagePrompt.slice(0, 80)}...\"`);\n\nreturn [{ json: { body: JSON.stringify(requestBody) } }];"
+      },
+      "id": "f53e32c1-0c60-4cf8-af67-b32775de429b",
+      "name": "Build Kie Request1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        8608,
+        3008
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract the generated image URL from Kie AI result\nconst data  = $input.first().json;\nlet kieImageUrl = '';\n\ntry {\n  const state         = data.data?.state;\n  const resultJsonStr = data.data?.resultJson;\n\n  if (state === 'success' && resultJsonStr) {\n    const resultData = JSON.parse(resultJsonStr);\n    kieImageUrl = resultData.resultUrls?.[0] || '';\n  } else {\n    console.log(`Kie state: ${state} — continuing without image`);\n  }\n} catch(e) {\n  console.log('Kie parse error: ' + e.message + ' — continuing without image');\n}\n\nif (kieImageUrl) {\n  console.log('Kie image ready: ' + kieImageUrl);\n} else {\n  console.log('No Kie image — HCTI will use gradient fallback background');\n}\n\n// Merge Kie image URL with all post data needed by Generate Image (HCTI)\nconst ctx = $('Extract Contra Post').first().json;\nreturn [{ json: { ...ctx, kieImageUrl } }];"
+      },
+      "id": "ccb06b79-cc67-4592-b1e7-b498750a552a",
+      "name": "Parse Kie Image URL1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        9760,
+        3024
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      },
+      "id": "dd8a50de-80df-4757-b494-009ca10dbbe6",
+      "name": "Daily Schedule 8am",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        3376,
+        3008
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Random delay 0-3 hours (0 to 10800 seconds)\nconst randomSeconds = Math.floor(Math.random() * 10800);\nconst hours = Math.floor(randomSeconds / 3600);\nconst minutes = Math.floor((randomSeconds % 3600) / 60);\nconsole.log(`Random delay: ${hours}h ${minutes}m (${randomSeconds}s)`);\nreturn [{ json: { delaySeconds: randomSeconds, delayLabel: `${hours}h ${minutes}m` } }];"
+      },
+      "id": "f942b8a3-e1db-4367-8e27-19ce7d0c2969",
+      "name": "Random Delay",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3600,
+        3008
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "amount": "={{ $json.delaySeconds }}"
+      },
+      "id": "ae0f2489-39dc-4ae7-9394-35d498ec8bb5",
+      "name": "Wait",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        3824,
+        3008
+      ],
+      "webhookId": "wait-morning-gen-001",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get today's day name, date, and detect Sunday\nconst now = new Date();\nconst days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];\nconst dayName = days[now.getDay()];\nconst dateStr = now.toISOString().split('T')[0];\nconst isSunday = now.getDay() === 0;\nconsole.log(`Today: ${dayName} ${dateStr} | Sunday mode: ${isSunday}`);\nreturn [{ json: { dayName, dateStr, isSunday } }];"
+      },
+      "id": "cb9deb41-70c3-493d-8f60-a1b77b58d02f",
+      "name": "Get Today",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4048,
+        3008
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "documentId": {
+          "__rl": true,
+          "value": "1IwKjyPCJ0tGpFpRceUxQwGACf9Uk0IZoSsoXqJyAAjY",
+          "mode": "list",
+          "cachedResultName": "Posts",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1IwKjyPCJ0tGpFpRceUxQwGACf9Uk0IZoSsoXqJyAAjY/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1006335578,
+          "mode": "list",
+          "cachedResultName": "📅 Topic Rotation",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1IwKjyPCJ0tGpFpRceUxQwGACf9Uk0IZoSsoXqJyAAjY/edit#gid=1006335578"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Day",
+              "lookupValue": "={{ $json.dayName }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "24ad4e1b-713b-4dac-ac62-a3f3229c7538",
+      "name": "Read Topic Rotation",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [
+        4256,
+        3008
+      ],
+      "credentials": {
+        "googleApi": {
+          "id": "IsKwAiku6jrE5n03",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Find topic for today's day\nconst dayName = $('Get Today').first().json.dayName;\nconst isSunday = $('Get Today').first().json.isSunday;\nconst rows = $input.all();\nconst todayRow = rows.find(r => r.json['Day'] === dayName);\n\nif (!todayRow) {\n  throw new Error(`No topic found for ${dayName} in Topic Rotation sheet`);\n}\n\nconst category = todayRow.json['Category'];\nconst focus = todayRow.json['Topic Title'] || '';\nconst angle = todayRow.json['Description / Angle'] || $input.first().json['Content Direction'] || '';\n\nconsole.log(`Today's topic: ${category} | Focus: ${focus} | Sunday: ${isSunday}`);\nreturn [{ json: { category, focus, angle, dayName, isSunday } }];"
+      },
+      "id": "4def6549-1616-499c-8edf-115e007455b8",
+      "name": "Get Today Topic",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4480,
+        3008
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "documentId": {
+          "__rl": true,
+          "value": "1IwKjyPCJ0tGpFpRceUxQwGACf9Uk0IZoSsoXqJyAAjY",
+          "mode": "list",
+          "cachedResultName": "Posts",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1IwKjyPCJ0tGpFpRceUxQwGACf9Uk0IZoSsoXqJyAAjY/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 82993179,
+          "mode": "list",
+          "cachedResultName": "💡 Content Ideas",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1IwKjyPCJ0tGpFpRceUxQwGACf9Uk0IZoSsoXqJyAAjY/edit#gid=82993179"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Category",
+              "lookupValue": "={{ $json.category }}"
+            },
+            {
+              "lookupColumn": "Status",
+              "lookupValue": "Unused"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "7a928ae1-687c-48f8-b1bf-080c28bfe425",
+      "name": "Read Content Ideas",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [
+        4704,
+        3008
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleApi": {
+          "id": "IsKwAiku6jrE5n03",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Weekdays: Tavily drives the topic — Content Ideas not used\n// Sunday: check Content Ideas for what you built this week\n// Any day with explicit High priority override: use it\n\nconst isSunday = $('Get Today').first().json.isSunday;\nconst rows = $input.all();\nconst category = $('Get Today Topic').first().json.category;\n\n// ── Non-Sunday: only respect explicit High priority override ──────────────\nif (!isSunday) {\n  const highOverride = rows.find(r => {\n    const cat = String(r.json['Category'] || '').trim();\n    const status = String(r.json['Status'] || '').trim().toLowerCase();\n    const priority = String(r.json['Priority'] || '').trim().toLowerCase();\n    return cat === category && status === 'unused' && priority === 'high';\n  });\n\n  if (highOverride) {\n    console.log(`High priority override found: \"${highOverride.json['Idea Title']}\"`);\n    return [{ json: {\n      useIdea: true,\n      isSunday: false,\n      category,\n      ideaTitle: highOverride.json['Idea Title'] || '',\n      fullIdea: highOverride.json['Full Idea / Angle'] || '',\n      ideaRow: rows.indexOf(highOverride) + 2\n    }}];\n  }\n\n  // Default for all weekdays: let Tavily find the topic\n  console.log(`${category} — Tavily will discover today's topic from trending content`);\n  return [{ json: { useIdea: false, isSunday: false, category, ideaTitle: '', fullIdea: '', ideaRow: -1 }}];\n}\n\n// ── Sunday: look for \"What I Built\" idea ────────────────────────────────────\nconst sundayIdeas = rows.filter(r => {\n  const cat = String(r.json['Category'] || '').trim();\n  const status = String(r.json['Status'] || '').trim().toLowerCase();\n  return cat === 'What I Built' && status === 'unused';\n});\n\nconst priorityOrder = { 'high': 0, 'medium': 1, 'low': 2 };\nsundayIdeas.sort((a, b) => {\n  const pa = priorityOrder[String(a.json['Priority'] || 'low').toLowerCase()] ?? 2;\n  const pb = priorityOrder[String(b.json['Priority'] || 'low').toLowerCase()] ?? 2;\n  return pa - pb;\n});\n\nif (sundayIdeas.length > 0) {\n  const best = sundayIdeas[0];\n  console.log(`Sunday build post: \"${best.json['Idea Title']}\"`);\n  return [{ json: {\n    useIdea: true,\n    isSunday: true,\n    category,\n    ideaTitle: best.json['Idea Title'] || '',\n    fullIdea: best.json['Full Idea / Angle'] || '',\n    ideaRow: rows.indexOf(best) + 2\n  }}];\n}\n\nconsole.log('Sunday but no build idea in Content Ideas — will generate general AI insight post');\nreturn [{ json: { useIdea: false, isSunday: true, category, ideaTitle: '', fullIdea: '', ideaRow: -1 }}];"
+      },
+      "id": "f05290b6-eecc-4e49-91e1-c473c1aaf441",
+      "name": "Select Best Idea",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4928,
+        3008
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.tavily.com/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ (() => {\n  const category = $('Get Today Topic').first().json.category;\n  const idea = $('Select Best Idea').first().json;\n  const year = new Date().getFullYear();\n\n  const discoveryQueries = {\n    'Automation Tip':         `n8n Make.com Zapier automation workflow tip trick latest ${year}`,\n    'Tool Spotlight':         `n8n Make.com Vapi Retell AI LangChain Claude tool update release ${year}`,\n    'AI & Automation News':   `n8n Make.com AI automation business news trending ${year}`,\n    'Did You Know?':          `n8n Make.com automation workflow surprising fact statistic ${year}`,\n    'Use Case':               `n8n Make.com AI automation business use case ROI result ${year}`,\n    'Personal Brand':         `freelance AI automation engineer career n8n Make.com ${year}`,\n    'What I Built':           `n8n AI automation voice agent workflow project build ${year}`\n  };\n\n  const query = idea.useIdea && idea.ideaTitle\n    ? `${idea.ideaTitle} ${year}`\n    : (discoveryQueries[category] || `${category} automation ${year}`);\n\n  return JSON.stringify({\n    api_key: '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',\n    query: query,\n    search_depth: 'basic',\n    max_results: 8,\n    include_answer: false,\n    days: 7\n  });\n})() }}",
+        "options": {}
+      },
+      "id": "1974294f-2e51-4e78-be07-ad1e1b917c63",
+      "name": "Tavily Trend Discovery",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5136,
+        3008
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "documentId": {
+          "__rl": true,
+          "value": "1IwKjyPCJ0tGpFpRceUxQwGACf9Uk0IZoSsoXqJyAAjY",
+          "mode": "list",
+          "cachedResultName": "Posts",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1IwKjyPCJ0tGpFpRceUxQwGACf9Uk0IZoSsoXqJyAAjY/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1396108823,
+          "mode": "list",
+          "cachedResultName": "📝 Post Log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1IwKjyPCJ0tGpFpRceUxQwGACf9Uk0IZoSsoXqJyAAjY/edit#gid=1396108823"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Status",
+              "lookupValue": "posted"
+            },
+            {
+              "lookupColumn": "Status",
+              "lookupValue": "sent"
+            }
+          ]
+        },
+        "combineFilters": "OR",
+        "options": {}
+      },
+      "id": "def03b36-df67-4275-a515-e87a30e3430d",
+      "name": "Read Post Log (Past Topics)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [
+        5360,
+        3008
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleApi": {
+          "id": "IsKwAiku6jrE5n03",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Pick the best trending topic that we haven't written about yet\n// Uses keyword similarity — not exact matching — to detect overlapping topics\n\nconst trendData = $('Tavily Trend Discovery').first().json;\nconst postLogRows = $input.all(); // past posts from Read Post Log\nconst idea = $('Select Best Idea').first().json;\nconst category = $('Get Today Topic').first().json.category;\n\n// ── If manual override or Sunday with idea — skip trend selection ─────────\nif (idea.useIdea && idea.ideaTitle) {\n  console.log(`Override active: \"${idea.ideaTitle}\" — skipping trend selection`);\n  return [{ json: {\n    chosenTopic: idea.ideaTitle,\n    chosenSnippet: idea.fullIdea || '',\n    chosenUrl: '',\n    topicSource: 'manual_override',\n    allTrends: [],\n    skippedTopics: []\n  }}];\n}\n\n// ── Build list of past post titles ───────────────────────────────────────────\nconst pastTitles = postLogRows\n  .map(r => String(r.json['Post Title'] || '').trim())\n  .filter(t => t.length > 0);\n\nconsole.log(`Past posts to check against: ${pastTitles.length}`);\n\n// ── Similarity function — keyword overlap ────────────────────────────────────\nconst STOP_WORDS = new Set([\n  'a','an','the','is','are','was','were','be','been','being','have','has','had',\n  'do','does','did','will','would','could','should','may','might','must','shall',\n  'can','how','what','why','when','where','who','which','that','this','these',\n  'those','to','of','in','for','on','with','at','by','from','up','about','into',\n  'and','but','or','nor','not','just','also','all','some','any','each','every',\n  'more','most','other','such','very','even','still','back','down','here','there',\n  'than','then','so','as','if','its','your','our','their','new','top','best',\n  'using','use','uses','used','get','make','build','know','need','want','help',\n  'good','great','way','ways','find','take','give','work','works','working',\n  'tip','tips','trick','tricks','guide','look','looks','things','thing','one',\n  'two','three','five','ten','first','last','next','most','many','much',\n  'without','within','between','through','because','when','while','after','before'\n]);\n\nfunction extractKeywords(text) {\n  return text.toLowerCase()\n    .replace(/[^a-z0-9\\s]/g, ' ')\n    .split(/\\s+/)\n    .filter(w => w.length > 2 && !STOP_WORDS.has(w));\n}\n\nfunction isTooSimilar(candidateTopic, pastTitle) {\n  const candidateWords = new Set(extractKeywords(candidateTopic));\n  const pastWords = extractKeywords(pastTitle);\n\n  // Count how many meaningful words overlap\n  const overlap = pastWords.filter(w => candidateWords.has(w));\n\n  // 2+ meaningful keyword overlap = too similar\n  if (overlap.length >= 2) {\n    return { similar: true, overlap, matchedTitle: pastTitle };\n  }\n  return { similar: false };\n}\n\nfunction isTooSimilarToPast(candidateTopic) {\n  for (const pastTitle of pastTitles) {\n    const result = isTooSimilar(candidateTopic, pastTitle);\n    if (result.similar) return result;\n  }\n  return { similar: false };\n}\n\n// ── Parse Tavily trend results ────────────────────────────────────────────────\nlet trendResults = [];\ntry {\n  if (trendData.results && Array.isArray(trendData.results)) {\n    trendResults = trendData.results\n      .filter(r => r.title && r.content)\n      .map(r => ({\n        title: r.title,\n        snippet: (r.content || '').slice(0, 300),\n        url: r.url || '',\n        score: parseFloat(r.score) || 0\n      }))\n      .sort((a, b) => b.score - a.score);\n  }\n} catch(e) {\n  console.log('Error parsing trend results:', e.message);\n}\n\nconsole.log(`Trend candidates: ${trendResults.length}`);\n\n// ── Pick the best topic we haven't covered ────────────────────────────────────\nlet chosenTopic = null;\nlet chosenSnippet = '';\nlet chosenUrl = '';\nconst skippedTopics = [];\nconst allTrends = trendResults.map(r => ({ title: r.title, score: r.score }));\n\nfor (const result of trendResults) {\n  const similarityCheck = isTooSimilarToPast(result.title);\n\n  if (similarityCheck.similar) {\n    skippedTopics.push({\n      topic: result.title,\n      reason: `Too similar to past post: \"${similarityCheck.matchedTitle}\" (overlap: ${similarityCheck.overlap.join(', ')})`\n    });\n    console.log(`SKIP: \"${result.title}\" — similar to: \"${similarityCheck.matchedTitle}\"`);\n    continue;\n  }\n\n  // This topic is fresh — use it\n  chosenTopic = result.title;\n  chosenSnippet = result.snippet;\n  chosenUrl = result.url;\n  console.log(`CHOSEN: \"${result.title}\" (score: ${result.score.toFixed(3)})`);\n  break;\n}\n\n// ── Fallback: if all trending topics were already covered ────────────────────\nif (!chosenTopic) {\n  console.log('All trending topics already covered — using highest-score one anyway (oldest coverage)');\n  if (trendResults.length > 0) {\n    chosenTopic = trendResults[0].title;\n    chosenSnippet = trendResults[0].snippet;\n    chosenUrl = trendResults[0].url;\n  } else {\n    chosenTopic = category;\n    chosenSnippet = '';\n    chosenUrl = '';\n    console.log('No trend results at all — using category as fallback');\n  }\n}\n\nconsole.log(`Skipped ${skippedTopics.length} topics as already covered`);\n\nreturn [{ json: {\n  chosenTopic,\n  chosenSnippet,\n  chosenUrl,\n  topicSource: 'tavily_trend',\n  allTrends,\n  skippedTopics\n}}];"
+      },
+      "id": "c4b01c7b-171a-4332-8e10-a1b2b0b76bb4",
+      "name": "Pick Best Trend",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5600,
+        3008
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.tavily.com/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ (() => {\n  const trend = $json.chosenTopic;\n  const category = $('Get Today Topic').first().json.category;\n  const idea = $('Select Best Idea').first().json;\n  const year = new Date().getFullYear();\n\n  const query = $json.chosenSnippet;\n\n  return JSON.stringify({\n    \n  api_key: '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',\n    query: query,\n    search_depth: 'advanced',\n    max_results: 5,\n    include_answer: true,\n    days: 30\n  });\n})() }}",
+        "options": {}
+      },
+      "id": "daed6d71-d430-4007-be78-7fa25ed0f314",
+      "name": "Tavily Deep Dive",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5856,
+        3008
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combine trend discovery + deep dive into one rich research block for Claude\nconst deepDiveData = $input.first().json;\nconst trend = $('Pick Best Trend').first().json;\nconst topic = $('Get Today Topic').first().json;\nconst idea = $('Select Best Idea').first().json;\nconst today = $('Get Today').first().json;\n\n// ── Extract deep dive results ─────────────────────────────────────────────\nlet deepAnswer = '';\nlet deepResults = [];\nlet sources = [];\n\ntry {\n  if (deepDiveData.answer) deepAnswer = deepDiveData.answer;\n  if (deepDiveData.results && Array.isArray(deepDiveData.results)) {\n    deepResults = deepDiveData.results.slice(0, 5).map(r => ({\n      title: r.title || '',\n      snippet: (r.content || '').slice(0, 500),\n      url: r.url || '',\n      score: r.score || 0\n    }));\n    sources = deepResults.map(r => r.url).filter(Boolean);\n  }\n  console.log(`Deep dive: ${deepResults.length} results. Answer: ${deepAnswer ? 'yes' : 'no'}`);\n} catch(e) {\n  console.log('Deep dive parse error:', e.message);\n}\n\n// ── Build the research block Claude will read ────────────────────────────────\nlet researchBlock = '';\n\n// What topic was chosen and why\nresearchBlock += `CHOSEN TOPIC: ${trend.chosenTopic}\\n`;\nresearchBlock += `SOURCE: ${trend.topicSource === 'tavily_trend' ? 'Selected from trending results (highest relevance score)' : trend.topicSource}\\n\\n`;\n\n// The synthesized answer (best single summary)\nif (deepAnswer) {\n  researchBlock += `SUMMARY:\\n${deepAnswer}\\n\\n`;\n}\n\n// Detailed results\nif (deepResults.length > 0) {\n  researchBlock += `DETAILED SOURCES:\\n`;\n  deepResults.forEach((r, i) => {\n    researchBlock += `\\n[${i+1}] ${r.title}\\n${r.snippet}\\n`;\n  });\n}\n\n// What else was trending (context)\nif (trend.allTrends && trend.allTrends.length > 1) {\n  researchBlock += `\\nOTHER TRENDING TOPICS THIS WEEK (not used today):\\n`;\n  trend.allTrends.slice(1).forEach(t => {\n    researchBlock += `- ${t.title}\\n`;\n  });\n}\n\nconst hasResearch = researchBlock.length > 100;\nconsole.log(`Research block built: ${researchBlock.length} chars | Sources: ${sources.length}`);\n\nreturn [{ json: {\n  researchBlock: researchBlock.slice(0, 4000),\n  hasResearch,\n  chosenTopic: trend.chosenTopic,\n  topicSource: trend.topicSource,\n  sources: sources.slice(0, 3).join(', '),\n  category: topic.category,\n  contentDirection: topic.angle,\n  useIdea: idea.useIdea || false,\n  ideaTitle: idea.ideaTitle || '',\n  fullIdea: idea.fullIdea || '',\n  dateStr: today.dateStr,\n  dayName: today.dayName,\n  isSunday: today.isSunday\n}}];"
+      },
+      "id": "40f65d71-0cd6-4f42-be8e-49a740d266d9",
+      "name": "Extract Research",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6192,
+        3008
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build Claude prompt — split into systemPrompt and userPrompt for AI Agent node\nconst d = $input.first().json;\n\nlet systemPrompt, userPrompt;\n\n// ── System prompt: who Abdullah is (same for all days) ───────────────────────\nsystemPrompt = `You are Abdullah Tariq — an AI automation engineer from Pakistan who works \nat Trilles AI, an AI automation startup.\n\nYou write LinkedIn posts to share your knowledge and perspective on AI \nautomation — n8n workflows, AI voice agents, chatbots, and business \nautomation systems.\n\nIMPORTANT TONE RULES:\n- Write from the perspective of someone who deeply understands this space\n- Share insights, breakdowns, and observations — not war stories\n- Never say \"I built this for a client\" or imply real client work\n- Never say \"real money on the line\" or \"actual results\"\n- Never make it sound like a case study or project recap\n- Instead write like: \"here is how this works\", \"this is what most \n  people get wrong\", \"this is worth knowing if you are building X\"\n- You are a knowledgeable practitioner sharing what you know — \n  not someone proving themselves through client wins\n- Direct and clear\n- No fluff\n- No jargon\n- No emojis\n- No hashtags`;\n\n// ── User prompt: what to write today ─────────────────────────────────────────\nif (d.isSunday) {\n  const buildContext = d.useIdea && d.ideaTitle\n    ? `What you built/worked on this week: ${d.ideaTitle}\\n${d.fullIdea ? `Details: ${d.fullIdea}` : ''}`\n    : `You don't have a specific build to share today. Write about something you've been thinking about or experimenting with in AI automation this week.`;\n\n  userPrompt = `Write today's Sunday Build Post.\n\n${buildContext}\n\n## What to include\n1. What you built or explored this week — be concrete, name the tools, describe the problem it solved\n2. One key thing you learned or a problem you ran into\n3. A BUILD IDEA for your readers: one specific automation or AI project a small business owner could implement — practical, achievable, valuable\n4. End with a question asking what they are building or want to automate\n\n## Research context (use if relevant)\n${d.researchBlock || 'No external research today.'}\n\n## Writing rules\n- Write like you are sharing with a smart friend in business/tech\n- Short sentences, one idea per line, breathing room between thoughts\n- Hook: first 2 lines must make someone stop scrolling\n- Concrete over vague — tool names, numbers, real problems\n- DO NOT use: bullet points, hashtags, emojis, buzzwords like game-changer/leverage/transformative\n- DO NOT start the post with the word \"I\"\n- Length: 150-250 words\n\nReturn ONLY this JSON:\n{\n  \"title\": \"5-8 word title for the post\",\n  \"post\": \"The full post text\",\n  \"image_prompt\": \"One sentence: bold text to show, background color, visual style.\"\n}`;\n\n} else {\n  const overrideNote = d.useIdea && d.ideaTitle\n    ? `\\nMANUAL TOPIC: Write specifically about \"${d.ideaTitle}\"${d.fullIdea ? ` — angle: ${d.fullIdea}` : ''}. Use the research as supporting context.`\n    : `\\nTOPIC SELECTION: Read the research below. Pick the most interesting, timely angle. The topic must come from what is actually happening in the market right now.`;\n\n  userPrompt = `Write a LinkedIn post for today.\n\n## Category: ${d.category}\n## Direction: ${d.contentDirection}\n${overrideNote}\n\n## Real-time research — what is happening in the market right now:\n${d.hasResearch ? d.researchBlock : 'No research available — write from your own expertise.'}\n\n## Your job\n${d.useIdea ? 'Write about the manual topic above using research as supporting context.' : 'Read the research. Find the most interesting angle. Write a post that feels like you just noticed something real — because you did. Do not write a generic post.'}\n\n## Writing rules\n- Write like texting a smart friend who works in business or tech\n- Short sentences. One idea per line. Space between thoughts.\n- Hook: first 2 lines must make someone stop scrolling — lead with the insight\n- Include one specific concrete detail: a number, a tool name, a real example\n- If research has a stat or fact, use it naturally\n- End with a question that makes people want to reply\n- DO NOT use: bullet points, hashtags, emojis, \"game-changer\", \"leverage\", \"delve\", \"transformative\"\n- DO NOT start the post with the word \"I\"\n- Length: 150-250 words\n\nReturn ONLY this JSON:\n{\n  \"title\": \"5-8 word title summarising what the post is actually about\",\n  \"post\": \"The full post text\",\n  \"image_prompt\": \"One sentence: bold text to show, background color, visual style.\"\n}`;\n}\n\nreturn [{ json: { systemPrompt, userPrompt, ...d } }];"
+      },
+      "id": "b6849af1-9caa-4aaf-8623-1259b486fa0d",
+      "name": "Build Claude Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6416,
+        3008
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.userPrompt }}",
+        "options": {
+          "systemMessage": "={{ $json.systemPrompt }}"
+        }
+      },
+      "id": "5e48ff45-9b03-4652-840c-1f8191165d4b",
+      "name": "Claude Draft Post",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        6752,
+        3008
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse AI Agent draft response\nconst agentOutput = $input.first().json.output || '';\nlet postData;\n\ntry {\n  const cleaned = agentOutput.replace(/^```json\\s*/i, '').replace(/```\\s*$/i, '').trim();\n  postData = JSON.parse(cleaned);\n} catch(e) {\n  throw new Error('Agent returned invalid JSON: ' + e.message + ' | Raw: ' + agentOutput.slice(0, 200));\n}\n\nif (!postData.post || !postData.title) {\n  throw new Error('Agent response missing required fields (post or title)');\n}\n\nconst ctx = $('Extract Research').first().json;\nconsole.log(`Draft ready: \"${postData.title}\"`);\n\nreturn [{ json: {\n  title: postData.title,\n  post: postData.post,\n  imagePrompt: postData.image_prompt || '',\n  category: ctx.category,\n  sources: ctx.sources,\n  dateStr: ctx.dateStr,\n  dayName: ctx.dayName,\n  isSunday: ctx.isSunday,\n  researchBlock: ctx.researchBlock\n}}];"
+      },
+      "id": "85b34c9c-8e56-41f6-ba57-3046365bd3a4",
+      "name": "Parse Draft",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        7104,
+        3008
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Here are 3 examples of high-performing LinkedIn posts from the automation/AI space. Study the rhythm and structure:\n\n---\nEXAMPLE 1:\nMy client's team was spending 6 hours a week on a task that took my automation 4 minutes to do.\n\nThe task: pulling data from 3 tools, formatting it, sending a summary email.\n\nTotal build time: 90 minutes.\n\nHere's what I've learned building 40+ automations:\n\nThe ROI of automation isn't in the hours you save.\nIt's in what those hours get spent on instead.\n\nOne of my clients used those 6 hours to finally start their newsletter.\nAnother used it to take Friday afternoons off.\n\nThat's the real value.\n\nWhat's one task in your business that you keep doing manually because you haven't gotten around to automating it?\n---\n\nEXAMPLE 2:\nMost businesses don't need more AI tools.\n\nThey need the ones they already have to talk to each other.\n\nI've audited 20+ small business tech stacks this year.\nAlmost every one has the same problem:\n\nGood tools. Bad connections.\n\nHubSpot that doesn't know what happened in Calendly.\nSlack that doesn't know what closed in Stripe.\nA team that fills the gaps manually every single day.\n\nFix the connections first.\nThe fancy AI agents can wait.\n\nWhat does your tech stack look like right now?\n---\n\nEXAMPLE 3:\nBuilt an AI voice receptionist for a dental clinic last month.\n\nIt answers calls, books appointments, and handles FAQs.\n24/7. No staff needed.\n\nThe clinic owner told me this week they've stopped missing new patient calls entirely.\n\nBefore: 3-4 missed calls a day going to voicemail.\nAfter: every call answered, 40% convert to bookings.\n\nThe tech: Retell AI + Twilio + n8n + Google Calendar.\nBuild time: about 12 hours over 2 days.\n\nIf you run a service business, I promise missed calls are costing you more than you think.\n\nHas anyone else built voice agents for their clients? What worked?\n---\n\nNow rewrite this draft post in the same style:\n\nDRAFT:\n{{ $('Parse Draft').first().json.post }}\n\nRULES:\n- Keep all facts and insights — do not lose the research\n- Strengthen the hook — first 2 lines must make someone stop scrolling\n- Use the rhythm from examples: short punchy lines, then one slightly longer insight, back to short\n- Sound like Abdullah: direct, practical, someone who builds real things\n- DO NOT add bullet points, hashtags, emojis, or buzzwords\n- DO NOT start with the word \"I\"\n- Keep the question at the end\n- Length: 150-250 words\n\nReturn ONLY the rewritten post text. No explanation.",
+        "options": {
+          "systemMessage": "=You are a professional content editor who helps technical founders write LinkedIn posts that get read and shared. You preserve all facts from the original while making the writing sharper, more direct, and human.\n\nYou will always sound like Human. Donot sound like human.\n\n- NO long emdashes between the sentences."
+        }
+      },
+      "id": "e3aad2d2-bac4-4439-9bc2-9e4b5a352d97",
+      "name": "Claude Rewrite Pass",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        7360,
+        3008
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract LinkedIn post from AI Agent rewrite output\nconst agentOutput = $input.first().json.output || '';\nlet linkedInPost = agentOutput.trim();\n\nif (!linkedInPost) {\n  console.log('Rewrite agent returned empty — falling back to draft');\n  linkedInPost = $('Parse Draft').first().json.post;\n}\n\nconst draft = $('Parse Draft').first().json;\nconsole.log(`LinkedIn post ready. Length: ${linkedInPost.length} chars`);\n\nreturn [{ json: {\n  title: draft.title,\n  linkedInPost,\n  imagePrompt: draft.imagePrompt,\n  category: draft.category,\n  sources: draft.sources,\n  dateStr: draft.dateStr,\n  dayName: draft.dayName,\n  isSunday: draft.isSunday\n}}];"
+      },
+      "id": "e71297e8-1907-498f-8984-abc0addfb165",
+      "name": "Extract LinkedIn Post",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        7760,
+        3008
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Here is the LinkedIn post:\n{{ $('Extract LinkedIn Post').first().json.linkedInPost }}\n\nTASK 1 — CONTRA POST:\nRewrite this as a Contra post (100-130 words) that:\n1. Keeps the core topic and insight from the LinkedIn post\n2. Shifts the angle toward service availability — \"here is what I build\" \n   or \"here is what this looks like as a service\"\n3. Is direct and results-focused — business owners read fast\n4. Ends with a soft CTA like \"If you need this built, message me on Contra\"\n5. No jargon, no emojis, no hashtags\n6. Do not start with \"I\"\n\nTASK 2 — IMAGE PROMPT:\nBased on the content of this post, write a detailed image prompt \nfor a clean infographic or diagram.\n\nFollow these rules:\n- Choose the most suitable infographic type for this content\n  (process flow / step-by-step / before-after / framework / \n  icon-label grid / comparison)\n- List every label, step, or element that should appear\n- Describe the layout clearly (left to right, top to bottom, grid)\n- Mention box shapes and arrow directions where relevant\n- White or light grey background\n- Purple and blue accents only\n- Short labels, clean spacing, one concept only\n- Detailed enough that the same diagram could be recreated \n  by anyone reading the prompt\n\nOUTPUT FORMAT:\nWrite the Contra post first.\nThen on the very last line write exactly this (no blank line before it):\nIMAGE_PROMPT: [your detailed infographic prompt here]",
+        "options": {
+          "systemMessage": "=You are helping Abdullah Tariq — an AI automation engineer at Trilles AI — \nrepurpose his LinkedIn posts for Contra, a freelancer platform where small \nbusiness owners browse and hire specialists.\n\nABOUT ABDULLAH:\nHe builds AI-powered automation systems for small and mid-size businesses — \nthings like automated lead follow-up, client onboarding, document processing, \nCRM integrations, and workflow automation using tools like n8n, Make, Zapier, \nAirtable, Notion, and custom AI pipelines.\n\nCONTRA AUDIENCE:\nSmall business owners who are busy, non-technical, and results-focused. \nThey read fast. They want to know what problem gets solved, how it works \nat a high level, and how to hire Abdullah to build it. They do not want \ntheory, jargon, or long explanations.\n\nCONTRA POST TONE RULES:\n- Direct and practical\n- Service-oriented — \"here is what I build\" or \"here is what this looks like\"\n- No emojis\n- No hashtags\n- No jargon\n- Short sentences\n- Results first, process second\n- Never start with \"I\"\n- End with a soft CTA pointing to Contra\n\n---\n\nIMAGE RULES:\n\nThe image accompanying each post must be a clean infographic or diagram — \nnot AI-generated art, not photorealistic renders, not abstract visuals.\n\nPreferred infographic types for AI automation content:\n- Process flow (e.g. Input → Automation → Output)\n- Step-by-step (how the system works in 3–5 steps)\n- Before/After (manual process vs automated process)\n- Simple framework (what the service includes or costs)\n- Icon + label grid (tools connected together or features listed)\n- Comparison (two approaches side by side)\n\nImage design rules:\n- One concept per image — do not combine multiple ideas\n- Short labels only — no sentences, no paragraphs\n- Clean white or very light grey background\n- Purple and blue as accent colors only\n- Clean spacing throughout\n- Easy to scan at a glance\n- No tiny text\n- No clutter\n- No hex codes\n- No logos\n- No people\n- No decorative elements that add no meaning\n\nWhen writing the IMAGE_PROMPT, be specific:\n- Name the infographic type\n- List every label, step, or element that should appear\n- Describe layout direction (left to right, top to bottom, grid)\n- Mention box shapes, arrow styles, or icons only if they add clarity\n- Describe colors only as names like \"purple\" or \"blue\" — no hex codes\n- The prompt should be detailed enough that anyone reading it \n  can produce the exact same diagram"
+        }
+      },
+      "id": "eea460a8-5293-4117-a410-96c2adcc033d",
+      "name": "Claude Contra Version",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        8016,
+        3008
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract Contra post and IMAGE_PROMPT from AI Agent output\nconst agentOutput = $input.first().json.output || '';\n\n// Split on IMAGE_PROMPT: — everything before is the post, after is the prompt\nconst parts = agentOutput.split(/IMAGE_PROMPT:/i);\nlet contraPost   = parts[0].trim();\nconst rawPrompt  = parts.length > 1 ? parts[1].trim() : '';\n\n// Fallback image prompt if Claude didn't include one\nconst category = $('Get Today Topic').first().json.category || 'AI automation';\nconst topic    = $('Pick Best Trend').first().json.chosenTopic || category;\nconst imagePrompt = rawPrompt ||\n  `Abstract tech visualization of ${topic}, dark cinematic background, purple blue tones, no text, no people`;\n\nif (!contraPost) {\n  console.log('Contra agent returned empty — using LinkedIn post as fallback');\n  contraPost = $('Extract LinkedIn Post').first().json.linkedInPost;\n}\n\nconst ctx = $('Extract LinkedIn Post').first().json;\nconsole.log(`Contra post ready. Length: ${contraPost.length} chars`);\nconsole.log(`Image prompt: \"${imagePrompt.slice(0, 80)}...\"`);\n\nreturn [{ json: {\n  title:        ctx.title,\n  linkedInPost: ctx.linkedInPost,\n  contraPost,\n  imagePrompt,\n  category:     ctx.category,\n  sources:      ctx.sources,\n  dateStr:      ctx.dateStr,\n  dayName:      ctx.dayName,\n  isSunday:     ctx.isSunday\n}}];"
+      },
+      "id": "2f7db855-1e0e-41fc-98a8-0d55e0dedfbf",
+      "name": "Extract Contra Post",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        8368,
+        3008
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://hcti.io/v1/image",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "html",
+              "value": "=<div style=\"font-family:'Inter',Arial,sans-serif;background:linear-gradient(135deg,#0a0e1a 0%,#1a1f3a 100%);color:white;width:1200px;height:628px;display:flex;flex-direction:column;padding:72px 88px;box-sizing:border-box;position:relative;overflow:hidden;\"><div style=\"position:absolute;top:-120px;right:-120px;width:560px;height:560px;background:radial-gradient(circle,rgba(99,102,241,0.22) 0%,transparent 65%);border-radius:50%;\"></div><div style=\"position:absolute;bottom:-90px;left:-70px;width:440px;height:440px;background:radial-gradient(circle,rgba(59,130,246,0.14) 0%,transparent 65%);border-radius:50%;\"></div><div style=\"position:absolute;top:42%;right:80px;width:260px;height:260px;background:radial-gradient(circle,rgba(139,92,246,0.10) 0%,transparent 65%);border-radius:50%;\"></div><div style=\"position:relative;z-index:1;flex:1;display:flex;flex-direction:column;justify-content:center;\"><div style=\"display:inline-flex;align-items:center;gap:12px;margin-bottom:36px;width:fit-content;\"><div style=\"width:10px;height:10px;background:#6366f1;border-radius:50%;box-shadow:0 0 14px rgba(99,102,241,0.95);\"></div><span style=\"font-size:13px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#818cf8;\">{{ $json.category }}</span></div><div style=\"font-size:{{ ($json.title||'').length<45 ? '58' : ($json.title||'').length<70 ? '50' : ($json.title||'').length<95 ? '42' : '35' }}px;font-weight:800;line-height:1.12;margin-bottom:40px;max-width:900px;word-wrap:break-word;\">{{ $json.title }}</div><div style=\"width:100px;height:5px;background:linear-gradient(90deg,#6366f1,#3b82f6,rgba(59,130,246,0));border-radius:4px;\"></div></div><div style=\"position:relative;z-index:1;display:flex;align-items:center;justify-content:space-between;padding-top:20px;border-top:1px solid rgba(255,255,255,0.10);\"><div style=\"display:flex;gap:6px;align-items:center;\"><div style=\"width:7px;height:7px;background:#6366f1;border-radius:50%;opacity:0.8;\"></div><div style=\"width:7px;height:7px;background:#3b82f6;border-radius:50%;opacity:0.5;\"></div><div style=\"width:7px;height:7px;background:rgba(255,255,255,0.2);border-radius:50%;\"></div></div><div style=\"display:flex;gap:5px;align-items:center;\"><div style=\"width:28px;height:3px;background:#6366f1;border-radius:2px;\"></div><div style=\"width:18px;height:3px;background:#3b82f6;border-radius:2px;opacity:0.6;\"></div><div style=\"width:10px;height:3px;background:rgba(255,255,255,0.25);border-radius:2px;\"></div></div></div></div>"
+            },
+            {
+              "name": "css",
+              "value": "@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "995fdce7-8f90-4a36-aa57-b9fd7f3b5e28",
+      "name": "Generate Image",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        10000,
+        3024
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "tzPy3JeIeUBfb8LP",
+          "name": "HCTI Image API"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Collect all post data + both image URLs\n\n// ── HCTI branded card (main image) ───────────────────────────────────────────\nlet imageUrl = '';\ntry {\n  const imgData = $input.first().json;\n  imageUrl = imgData.url || imgData.image_url || '';\n  if (imageUrl) console.log('HCTI card URL:', imageUrl);\n  else console.log('HCTI image not generated — continuing without it');\n} catch(e) {\n  console.log('HCTI step failed:', e.message);\n}\n\n// ── Kie AI generated visual (secondary image) ────────────────────────────────\nlet kieImageUrl = '';\ntry {\n  kieImageUrl = $('Parse Kie Image URL1').first().json.kieImageUrl || '';\n  if (kieImageUrl) console.log('Kie image URL:', kieImageUrl);\n  else console.log('Kie image not generated — continuing without it');\n} catch(e) {\n  console.log('Kie image unavailable:', e.message);\n}\n\nconst ctx = $('Extract Contra Post').first().json;\n\nreturn [{ json: {\n  title:        ctx.title,\n  linkedInPost: ctx.linkedInPost,\n  contraPost:   ctx.contraPost,\n  imageUrl,        // Main image: HCTI branded card (title + category)\n  kieImageUrl,     // Secondary image: Kie AI infographic/visual\n  category:     ctx.category,\n  sources:      ctx.sources,\n  dateStr:      ctx.dateStr,\n  dayName:      ctx.dayName,\n  isSunday:     ctx.isSunday\n}}];"
+      },
+      "id": "53b8a339-41ed-4628-842b-bd6d41129828",
+      "name": "Collect All Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        10224,
+        3024
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1IwKjyPCJ0tGpFpRceUxQwGACf9Uk0IZoSsoXqJyAAjY",
+          "mode": "list",
+          "cachedResultName": "Posts",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1IwKjyPCJ0tGpFpRceUxQwGACf9Uk0IZoSsoXqJyAAjY/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "📝 Post Log",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date": "={{ $json.dateStr }}",
+            "Status": "review",
+            "Day": "={{ $json.dayName }}",
+            "Topic Category": "={{ $json.category }}",
+            "Post Title": "={{ $json.title }}",
+            "Post Content (Full)": "={{ $json.linkedInPost }}",
+            "Contra Post Content": "={{ $json.contraPost }}",
+            "Image URL": "={{ $json.imageUrl }}",
+            "Research Sources": "={{ $json.sources }}",
+            "LinkedIn Status": "pending",
+            "Contra Status": "pending",
+            "Email Sent": "no",
+            "Diagram URL": "={{ $json.kieImageUrl }}"
+          },
+          "matchingColumns": [
+            "Date"
+          ],
+          "schema": [
+            {
+              "id": "Date",
+              "displayName": "Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Day",
+              "displayName": "Day",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Topic Category",
+              "displayName": "Topic Category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Post Title",
+              "displayName": "Post Title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Post Content (Full)",
+              "displayName": "Post Content (Full)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Contra Post Content",
+              "displayName": "Contra Post Content",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Image URL",
+              "displayName": "Image URL",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Diagram URL",
+              "displayName": "Diagram URL",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Research Sources",
+              "displayName": "Research Sources",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "LinkedIn Post URL",
+              "displayName": "LinkedIn Post URL",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "LinkedIn Status",
+              "displayName": "LinkedIn Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Contra Status",
+              "displayName": "Contra Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Email Sent",
+              "displayName": "Email Sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Notes",
+              "displayName": "Notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "b0dfec51-738c-44e9-b69c-6235602bf39e",
+      "name": "Save to Post Log",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [
+        10448,
+        3024
+      ],
+      "credentials": {
+        "googleApi": {
+          "id": "IsKwAiku6jrE5n03",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "abdtariq3274@gmail.com",
+        "subject": "={{ $('Collect All Data').first().json.isSunday ? '[Sunday Build] ' : '[Review Post] ' }}{{ $('Collect All Data').first().json.title }}",
+        "message": "=<div style=\"font-family: Arial, sans-serif; max-width: 720px; margin: 0 auto; padding: 20px; color: #111;\">\n\n<h2 style=\"color: #1a1f3a; border-bottom: 3px solid #6366f1; padding-bottom: 10px;\">Today's Posts — Ready for Review</h2>\n\n<table style=\"width: 100%; margin-bottom: 24px;\">\n  <tr><td style=\"color:#666; width:120px;\"><strong>Date:</strong></td><td>{{ $('Collect All Data').first().json.dateStr }}</td></tr>\n  <tr><td style=\"color:#666;\"><strong>Day:</strong></td><td>{{ $('Collect All Data').first().json.dayName }}</td></tr>\n  <tr><td style=\"color:#666;\"><strong>Category:</strong></td><td>{{ $('Collect All Data').first().json.category }}</td></tr>\n  <tr><td style=\"color:#666;\"><strong>Title:</strong></td><td><strong>{{ $('Collect All Data').first().json.title }}</strong></td></tr>\n</table>\n\n<h3 style=\"color:#1a1f3a; margin-bottom:6px;\">Main Image — Branded Card</h3>\n<p style=\"color:#6b7280; font-size:13px; margin-bottom:10px;\">Use this as your primary LinkedIn post image.</p>\n{{ $('Collect All Data').first().json.imageUrl ? '<img src=\"' + $('Collect All Data').first().json.imageUrl + '\" style=\"width:100%; max-width:640px; border-radius:8px; margin-bottom:8px; display:block;\" />' : '<p style=\"color:#999; font-style:italic; font-size:13px;\">HCTI image not generated.</p>' }}\n{{ $('Collect All Data').first().json.imageUrl ? '<p style=\"font-size:12px; color:#9ca3af; margin-bottom:24px;\">URL: ' + $('Collect All Data').first().json.imageUrl + '</p>' : '' }}\n\n<h3 style=\"color:#1a1f3a; margin-bottom:6px;\">Secondary Image — AI Visual (Kie)</h3>\n<p style=\"color:#6b7280; font-size:13px; margin-bottom:10px;\">Use as supporting visual or infographic in your post.</p>\n{{ $('Collect All Data').first().json.kieImageUrl ? '<img src=\"' + $('Collect All Data').first().json.kieImageUrl + '\" style=\"width:100%; max-width:640px; border-radius:8px; margin-bottom:8px; display:block;\" />' : '<p style=\"color:#999; font-style:italic; font-size:13px;\">Kie AI image not generated.</p>' }}\n{{ $('Collect All Data').first().json.kieImageUrl ? '<p style=\"font-size:12px; color:#9ca3af; margin-bottom:24px;\">URL: ' + $('Collect All Data').first().json.kieImageUrl + '</p>' : '' }}\n\n<hr style=\"border: 1px solid #e5e7eb; margin: 24px 0;\">\n\n<h3 style=\"color: #1a1f3a; margin-bottom: 8px;\">LinkedIn Post</h3>\n<p style=\"color: #6b7280; font-size: 13px; margin-bottom: 12px;\">Copy and paste this to LinkedIn manually.</p>\n<div style=\"background: #f0f4ff; border-left: 4px solid #6366f1; padding: 20px; border-radius: 4px; white-space: pre-line; font-size: 15px; line-height: 1.7;\">\n{{ $('Collect All Data').first().json.linkedInPost }}\n</div>\n\n<hr style=\"border: 1px solid #e5e7eb; margin: 24px 0;\">\n\n<h3 style=\"color: #059669; margin-bottom: 8px;\">Contra Post</h3>\n<p style=\"color: #6b7280; font-size: 13px; margin-bottom: 12px;\">Copy and paste this to your Contra profile.</p>\n<div style=\"background: #f0fdf4; border-left: 4px solid #059669; padding: 20px; border-radius: 4px; white-space: pre-line; font-size: 15px; line-height: 1.7;\">\n{{ $('Collect All Data').first().json.contraPost }}\n</div>\n\n<hr style=\"border: 1px solid #e5e7eb; margin: 24px 0;\">\n\n<p style=\"color: #6b7280; font-size: 13px;\">Review the posts above. When ready, change status in Post Log to <strong>ready</strong> and the evening publisher will send them.</p>\n\n</div>",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "0d0ba6b6-75e5-48a2-bf75-22c579508d5d",
+      "name": "Email Preview",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        10656,
+        3024
+      ],
+      "webhookId": "f666d69b-87ef-4319-8037-2c7b5f7f4571",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "jPunZ33R85neYUy1",
+          "name": "Gmail account -- Personal"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1IwKjyPCJ0tGpFpRceUxQwGACf9Uk0IZoSsoXqJyAAjY",
+          "mode": "list",
+          "cachedResultName": "Posts",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1IwKjyPCJ0tGpFpRceUxQwGACf9Uk0IZoSsoXqJyAAjY/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "📝 Post Log",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date": "={{ $('Collect All Data').first().json.dateStr }}",
+            "Email Sent": "yes",
+            "row_number": 0
+          },
+          "matchingColumns": [
+            "Date"
+          ],
+          "schema": [
+            {
+              "id": "Date",
+              "displayName": "Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Day",
+              "displayName": "Day",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Topic Category",
+              "displayName": "Topic Category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Post Title",
+              "displayName": "Post Title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Post Content (Full)",
+              "displayName": "Post Content (Full)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Contra Post Content",
+              "displayName": "Contra Post Content",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Image URL",
+              "displayName": "Image URL",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Research Sources",
+              "displayName": "Research Sources",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "LinkedIn Post URL",
+              "displayName": "LinkedIn Post URL",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "LinkedIn Status",
+              "displayName": "LinkedIn Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Contra Status",
+              "displayName": "Contra Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Email Sent",
+              "displayName": "Email Sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Notes",
+              "displayName": "Notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "cea39778-cb2f-4a51-8ea9-5e142b63e436",
+      "name": "Mark Email Sent",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [
+        10880,
+        3024
+      ],
+      "credentials": {
+        "googleApi": {
+          "id": "IsKwAiku6jrE5n03",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $('Collect All Data').first().json;\nconsole.log(`Morning generator DONE. Post: \"${d.title}\" | ${d.dateStr} | Status: review | Email: sent`);\nreturn [{ json: { status: 'done', date: d.dateStr, title: d.title, phase: 'morning' } }];"
+      },
+      "id": "c1188030-76ad-494c-912b-98349995078e",
+      "name": "Done",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        11328,
+        3024
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "abdtariq3274@gmail.com",
+        "subject": "=[ERROR] Morning Generator Failed — {{ $json.execution.error.message.slice(0,60) }}",
+        "message": "=<h2 style=\"color:red;\">Morning workflow failed</h2>\n<p><strong>Error:</strong> {{ $json.execution.error.message }}</p>\n<p><strong>Node:</strong> {{ $json.execution.lastNode }}</p>\n<p><strong>Time:</strong> {{ $now.toISO() }}</p>\n<p>Log into n8n to investigate. Today's post was NOT generated.</p>",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "73f41dcf-9674-4a78-86b1-32afc1a9da0e",
+      "name": "Error Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        3600,
+        3312
+      ],
+      "webhookId": "8a8db131-8b86-4361-8a69-71dd6891f541",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "jPunZ33R85neYUy1",
+          "name": "Gmail account -- Personal"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "claude-sonnet-4-5-20250929",
+          "cachedResultName": "Claude Sonnet 4.5"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [
+        6624,
+        3216
+      ],
+      "id": "3957884e-cdcf-4255-88c3-1a9ea34e812d",
+      "name": "Anthropic Chat Model",
+      "credentials": {
+        "anthropicApi": {
+          "id": "wChIZFUHrcvE6BJT",
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "claude-sonnet-4-5-20250929",
+          "cachedResultName": "Claude Sonnet 4.5"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [
+        7232,
+        3216
+      ],
+      "id": "33d97498-f50d-4785-a80e-fad7c9e3d19f",
+      "name": "Anthropic Chat Model6",
+      "credentials": {
+        "anthropicApi": {
+          "id": "wChIZFUHrcvE6BJT",
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "claude-sonnet-4-5-20250929",
+          "cachedResultName": "Claude Sonnet 4.5"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [
+        7888,
+        3216
+      ],
+      "id": "f0728760-3b6f-4448-bd76-095ddab9a7be",
+      "name": "Anthropic Chat Model7",
+      "credentials": {
+        "anthropicApi": {
+          "id": "wChIZFUHrcvE6BJT",
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.kie.ai/api/v1/jobs/createTask",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer 741437daf617e243442b83d1d3eafca1"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.body }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        8816,
+        3008
+      ],
+      "id": "bc00faf2-709c-4462-b4ee-7ab2968a783b",
+      "name": "Create Task1"
+    },
+    {
+      "parameters": {
+        "amount": 10
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        9088,
+        3008
+      ],
+      "id": "6f10dd79-75a7-4205-975a-1c37ba136e62",
+      "name": "Wait for Generation1",
+      "webhookId": "1bce834b-2d63-51d1-939f-0bcf647eb1b5"
+    },
+    {
+      "parameters": {
+        "url": "https://api.kie.ai/api/v1/jobs/recordInfo",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "taskId",
+              "value": "={{ $json.data.taskId }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer 741437daf617e243442b83d1d3eafca1"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        9328,
+        3008
+      ],
+      "id": "ca90ec4d-273a-4c37-aa9d-a5093b87a2e3",
+      "name": "Check Task Status1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "74c075d1-5882-434e-8905-e1436e8754e8",
+              "leftValue": "={{ $json.data.state }}",
+              "rightValue": "waiting",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        9536,
+        3008
+      ],
+      "id": "1205d056-70e5-4d38-b254-222da8cfd3b6",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1IwKjyPCJ0tGpFpRceUxQwGACf9Uk0IZoSsoXqJyAAjY",
+          "mode": "list",
+          "cachedResultName": "Posts",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1IwKjyPCJ0tGpFpRceUxQwGACf9Uk0IZoSsoXqJyAAjY/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 82993179,
+          "mode": "list",
+          "cachedResultName": "💡 Content Ideas",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1IwKjyPCJ0tGpFpRceUxQwGACf9Uk0IZoSsoXqJyAAjY/edit#gid=82993179"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Idea Title": "={{$('Collect All Data').first().json.title}}",
+            "Status": "Used"
+          },
+          "matchingColumns": [
+            "Idea Title"
+          ],
+          "schema": [
+            {
+              "id": "Date Added",
+              "displayName": "Date Added",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Idea Title",
+              "displayName": "Idea Title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Category",
+              "displayName": "Category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Full Idea / Angle",
+              "displayName": "Full Idea / Angle",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Priority",
+              "displayName": "Priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Notes",
+              "displayName": "Notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "1595945b-602c-456b-af76-a8d4038471d3",
+      "name": "Mark Email Sent1",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [
+        11104,
+        3024
+      ],
+      "credentials": {
+        "googleApi": {
+          "id": "IsKwAiku6jrE5n03",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Build Kie Request1": {
+      "main": [
+        [
+          {
+            "node": "Create Task1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Kie Image URL1": {
+      "main": [
+        [
+          {
+            "node": "Generate Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily Schedule 8am": {
+      "main": [
+        [
+          {
+            "node": "Random Delay",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Random Delay": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Get Today",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Today": {
+      "main": [
+        [
+          {
+            "node": "Read Topic Rotation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Topic Rotation": {
+      "main": [
+        [
+          {
+            "node": "Get Today Topic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Today Topic": {
+      "main": [
+        [
+          {
+            "node": "Read Content Ideas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Content Ideas": {
+      "main": [
+        [
+          {
+            "node": "Select Best Idea",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select Best Idea": {
+      "main": [
+        [
+          {
+            "node": "Tavily Trend Discovery",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tavily Trend Discovery": {
+      "main": [
+        [
+          {
+            "node": "Read Post Log (Past Topics)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Post Log (Past Topics)": {
+      "main": [
+        [
+          {
+            "node": "Pick Best Trend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pick Best Trend": {
+      "main": [
+        [
+          {
+            "node": "Tavily Deep Dive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tavily Deep Dive": {
+      "main": [
+        [
+          {
+            "node": "Extract Research",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Research": {
+      "main": [
+        [
+          {
+            "node": "Build Claude Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Claude Prompt": {
+      "main": [
+        [
+          {
+            "node": "Claude Draft Post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Draft Post": {
+      "main": [
+        [
+          {
+            "node": "Parse Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Draft": {
+      "main": [
+        [
+          {
+            "node": "Claude Rewrite Pass",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Rewrite Pass": {
+      "main": [
+        [
+          {
+            "node": "Extract LinkedIn Post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract LinkedIn Post": {
+      "main": [
+        [
+          {
+            "node": "Claude Contra Version",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Contra Version": {
+      "main": [
+        [
+          {
+            "node": "Extract Contra Post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Contra Post": {
+      "main": [
+        [
+          {
+            "node": "Build Kie Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Image": {
+      "main": [
+        [
+          {
+            "node": "Collect All Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect All Data": {
+      "main": [
+        [
+          {
+            "node": "Save to Post Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save to Post Log": {
+      "main": [
+        [
+          {
+            "node": "Email Preview",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Preview": {
+      "main": [
+        [
+          {
+            "node": "Mark Email Sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Email Sent": {
+      "main": [
+        [
+          {
+            "node": "Mark Email Sent1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Claude Draft Post",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic Chat Model6": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Claude Rewrite Pass",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic Chat Model7": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Claude Contra Version",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Task1": {
+      "main": [
+        [
+          {
+            "node": "Wait for Generation1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for Generation1": {
+      "main": [
+        [
+          {
+            "node": "Check Task Status1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Task Status1": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Wait for Generation1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Parse Kie Image URL1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Email Sent1": {
+      "main": [
+        [
+          {
+            "node": "Done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "dd83febdae1d0555ff837dc20a7067f4e2c85eff11f39a6dee363ef07f457546"
+  }
+}

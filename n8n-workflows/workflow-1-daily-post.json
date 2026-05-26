@@ -1,0 +1,558 @@
+{
+  "name": "Daily LinkedIn & Contra Post Generator",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000001",
+      "name": "Daily Schedule 8am",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate random wait between 0 and 3 hours (10800 seconds)\n// This means posts go out anytime between 8am and 11am randomly\nconst min = 0;\nconst max = 10800;\nconst waitSeconds = Math.floor(Math.random() * (max - min + 1)) + min;\nconst waitMinutes = Math.round(waitSeconds / 60);\n\nconsole.log(`Will wait ${waitMinutes} minutes before posting`);\n\nreturn [{\n  json: {\n    waitSeconds,\n    waitMinutes,\n    scheduledFor: new Date(Date.now() + waitSeconds * 1000).toISOString()\n  }\n}];"
+      },
+      "id": "a1b2c3d4-0002-4000-8000-000000000002",
+      "name": "Calculate Random Delay",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": "={{ $json.waitSeconds }}",
+        "unit": "seconds"
+      },
+      "id": "a1b2c3d4-0003-4000-8000-000000000003",
+      "name": "Wait Random Time",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [440, 300],
+      "webhookId": "random-wait-webhook-001"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get current day name and date info\nconst now = new Date();\nconst days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];\nconst dayName = days[now.getDay()];\nconst dateStr = now.toISOString().split('T')[0];\nconst timeStr = now.toTimeString().split(' ')[0];\n\nreturn [{\n  json: {\n    dayName,\n    dateStr,\n    timeStr,\n    timestamp: now.toISOString(),\n    year: now.getFullYear()\n  }\n}];"
+      },
+      "id": "a1b2c3d4-0004-4000-8000-000000000004",
+      "name": "Get Current Day",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "operation": "getRows",
+        "documentId": {
+          "__rl": true,
+          "value": "1IwKjyPCJ0tGpFpRceUxQwGACf9Uk0IZoSsoXqJyAAjY",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "📅 Topic Rotation",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0005-4000-8000-000000000005",
+      "name": "Read Topic Rotation",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [880, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_WITH_GSHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Find today's topic from the rotation sheet\nconst dayName = $('Get Current Day').item.json.dayName;\nconst rows = $input.all();\n\nconst todayRow = rows.find(row => \n  row.json['Day'] === dayName && \n  String(row.json['Active']).trim().toUpperCase() === 'YES'\n);\n\nif (!todayRow) {\n  throw new Error(`No active topic found for ${dayName}. Check the Topic Rotation sheet.`);\n}\n\nconsole.log(`Today is ${dayName} — Topic: ${todayRow.json['Topic Title']}`);\n\nreturn [{\n  json: {\n    dayName,\n    category: todayRow.json['Category'],\n    topicTitle: todayRow.json['Topic Title'],\n    topicDescription: todayRow.json['Description / Angle'],\n    hashtags: todayRow.json['Hashtags'],\n    dateStr: $('Get Current Day').item.json.dateStr\n  }\n}];"
+      },
+      "id": "a1b2c3d4-0006-4000-8000-000000000006",
+      "name": "Find Todays Topic",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 300]
+    },
+    {
+      "parameters": {
+        "operation": "getRows",
+        "documentId": {
+          "__rl": true,
+          "value": "1IwKjyPCJ0tGpFpRceUxQwGACf9Uk0IZoSsoXqJyAAjY",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "💡 Content Ideas",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0007-4000-8000-000000000007",
+      "name": "Read Content Ideas",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [1320, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_WITH_GSHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Select the best unused idea for today's category\n// Falls back to the topic description if no matching idea found\n\nconst topicData = $('Find Todays Topic').item.json;\nconst category = topicData.category;\nconst rows = $input.all();\n\n// Filter: same category AND unused\nconst matchingIdeas = rows.filter(row => {\n  const rowCategory = String(row.json['Category'] || '').trim();\n  const rowStatus = String(row.json['Status'] || '').trim();\n  return rowCategory === category && rowStatus === 'Unused';\n});\n\nlet selectedIdea = null;\nlet ideaRowNumber = null;\nlet usingIdea = false;\n\nif (matchingIdeas.length > 0) {\n  // Prefer High priority, else pick any\n  const highPriority = matchingIdeas.filter(r => \n    String(r.json['Priority']).trim() === 'High'\n  );\n  const pool = highPriority.length > 0 ? highPriority : matchingIdeas;\n  \n  // Random selection from pool for variety\n  selectedIdea = pool[Math.floor(Math.random() * pool.length)];\n  \n  // Find row number in original array (+2 for header row offset)\n  ideaRowNumber = rows.indexOf(selectedIdea) + 2;\n  usingIdea = true;\n  \n  console.log(`Found idea: \"${selectedIdea.json['Idea Title']}\" (row ${ideaRowNumber})`);\n} else {\n  console.log(`No unused ideas for category \"${category}\" — using topic description as base`);\n}\n\n// Build Tavily research query\nconst researchQuery = usingIdea\n  ? `${selectedIdea.json['Idea Title']} ${category} practical tips 2026`\n  : `${topicData.topicTitle} ${category} latest trends statistics 2026`;\n\nreturn [{\n  json: {\n    usingIdea,\n    ideaTitle: usingIdea ? selectedIdea.json['Idea Title'] : topicData.topicTitle,\n    ideaAngle: usingIdea ? selectedIdea.json['Full Idea / Angle'] : topicData.topicDescription,\n    ideaRowNumber,\n    category,\n    hashtags: topicData.hashtags,\n    researchQuery,\n    dayName: topicData.dayName,\n    dateStr: topicData.dateStr,\n    topicTitle: topicData.topicTitle\n  }\n}];"
+      },
+      "id": "a1b2c3d4-0008-4000-8000-000000000008",
+      "name": "Select Best Idea",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1540, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.tavily.com/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"api_key\": \"PASTE_YOUR_TAVILY_API_KEY_HERE\",\n  \"query\": \"{{ $json.researchQuery }}\",\n  \"max_results\": 5,\n  \"search_depth\": \"advanced\",\n  \"include_answer\": true,\n  \"include_raw_content\": false\n}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "a1b2c3d4-0009-4000-8000-000000000009",
+      "name": "Tavily Research",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1760, 300],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build the Claude prompt — this is the most important node\n// The quality of this prompt determines if the post sounds human or AI\n\nconst ideaData = $('Select Best Idea').item.json;\nconst researchData = $('Tavily Research').item.json;\n\n// Extract and clean research results\nlet researchContext = '';\nlet researchAnswer = '';\n\ntry {\n  if (researchData && researchData.results && researchData.results.length > 0) {\n    researchAnswer = researchData.answer || '';\n    researchContext = researchData.results\n      .slice(0, 4)\n      .map(r => `- ${r.title}: ${String(r.content || r.snippet || '').substring(0, 250)}`)\n      .join('\\n');\n  }\n} catch(e) {\n  console.log('Research parsing failed, continuing without it');\n  researchContext = 'Use your own expertise for this post.';\n}\n\n// The system prompt that defines Abdullah's voice\nconst systemPrompt = `You are Abdullah Tariq — a 20-something AI Automation Engineer from Pakistan working at Trilles AI. You build real production systems: voice AI agents (Vapi, Retell AI), n8n automations, LangChain pipelines, and AI chatbots for businesses worldwide.\n\nYou are writing a LinkedIn post RIGHT NOW from your own experience. You are NOT writing marketing copy. You are NOT an AI assistant. You are a real practitioner sharing what you actually know and do.\n\nYOUR WRITING VOICE:\n- Conversational, direct, slightly informal but professional\n- Short sentences. Punchy. Like you typed this on your phone\n- First person always — \"I\", \"my clients\", \"we built\", \"I ran into\"\n- You name specific tools because you actually use them (n8n, Vapi, Retell AI, LangChain, Claude, Supabase, GHL)\n- You share real frustrations and wins — not just wins\n- You write like an engineer who knows what they're talking about, not a marketer\n- Pakistani background, global client base — this is authentic context\n\nHARD RULES — NEVER DO THESE:\n- NEVER start with: \"I'm excited\", \"Thrilled\", \"In today's world\", \"Are you tired of\", \"Let me share\"\n- NEVER use: game-changer, revolutionary, leverage, delve, unlock, seamless, cutting-edge, transformative, empower, reimagine\n- NEVER write bullet point lists — use paragraph breaks instead\n- NEVER sound like ChatGPT wrote it\n- NEVER add hashtags in the middle of the post — only at the very end\n- NEVER use em-dashes (—) more than once\n- NEVER write more than 350 words\n- NEVER start consecutive sentences with \"I\"\n\nPOST STRUCTURE (flexible, not rigid):\n[Hook line — 1-2 sentences. A specific observation, bold claim, or real scenario. No questions.]\n\n[blank line]\n\n[Core content — 2-4 short paragraphs. Be specific. Use real numbers if research provides them. Share the actual insight, not a vague overview.]\n\n[blank line]\n\n[Closing — either a direct question to the audience OR a punchy one-liner takeaway. Keep it short.]\n\n[blank line]\n\n#hashtag1 #hashtag2 #hashtag3 #hashtag4`;\n\n// The user prompt with the specific topic\nconst userPrompt = `Write a LinkedIn post about this:\n\nTopic: ${ideaData.ideaTitle}\nAngle to explore: ${ideaData.ideaAngle}\nCategory: ${ideaData.category}\nSuggested hashtag themes (adapt them): ${ideaData.hashtags}\n\nFresh research/context to weave in naturally (pick 1-2 facts that are genuinely interesting — skip anything generic):\n${researchAnswer ? `Summary: ${researchAnswer}\\n` : ''}${researchContext}\n\nRemember: Write as Abdullah — a real engineer sharing real experience. Not a blog post. Not a LinkedIn influencer post. Something authentic that a fellow engineer or business owner would actually read.`;\n\nreturn [{\n  json: {\n    systemPrompt,\n    userPrompt,\n    ideaData,\n    researchContext: researchContext.substring(0, 500)\n  }\n}];"
+      },
+      "id": "a1b2c3d4-0010-4000-8000-000000000010",
+      "name": "Build Claude Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1980, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "PASTE_YOUR_CLAUDE_API_KEY_HERE"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-6\",\n  \"max_tokens\": 1024,\n  \"system\": \"{{ $json.systemPrompt }}\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"{{ $json.userPrompt }}\"\n    }\n  ]\n}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "a1b2c3d4-0011-4000-8000-000000000011",
+      "name": "Claude Generate Post",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2200, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Claude response and clean the post\n\nconst response = $input.item.json;\n\nif (!response || !response.content || !response.content[0]) {\n  throw new Error('Claude API returned empty response. Check your API key and credits.');\n}\n\nlet postContent = response.content[0].text.trim();\n\n// Remove common AI preamble patterns\npostContent = postContent.replace(/^(here'?s? (the |a )?post:?\\s*)/i, '');\npostContent = postContent.replace(/^(linkedin post:?\\s*)/i, '');\npostContent = postContent.replace(/^[\"']/, '').replace(/[\"']$/, '');\n\n// Ensure post isn't too long for LinkedIn (max 3000 chars, we want under 700)\nif (postContent.length > 700) {\n  console.log(`Post too long (${postContent.length} chars), trimming...`);\n  // Cut at last paragraph before 700 chars\n  const trimmed = postContent.substring(0, 700);\n  const lastNewline = trimmed.lastIndexOf('\\n');\n  postContent = lastNewline > 400 ? trimmed.substring(0, lastNewline) : trimmed;\n}\n\n// Extract just the title (first line) for logging\nconst firstLine = postContent.split('\\n')[0].trim();\nconst postTitle = firstLine.length > 80 ? firstLine.substring(0, 80) + '...' : firstLine;\n\n// Get idea metadata\nconst ideaData = $('Select Best Idea').item.json;\n\nconsole.log(`Post generated successfully: ${postTitle}`);\nconsole.log(`Post length: ${postContent.length} characters`);\n\nreturn [{\n  json: {\n    postContent,\n    postTitle,\n    postLength: postContent.length,\n    category: ideaData.category,\n    ideaTitle: ideaData.ideaTitle,\n    ideaRowNumber: ideaData.ideaRowNumber,\n    usingIdea: ideaData.usingIdea,\n    hashtags: ideaData.hashtags,\n    dateStr: ideaData.dateStr,\n    dayName: ideaData.dayName\n  }\n}];"
+      },
+      "id": "a1b2c3d4-0012-4000-8000-000000000012",
+      "name": "Parse Post Content",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2420, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://hcti.io/v1/image",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"html\": \"<div class='card'><div class='badge'>{{ $json.category }}</div><div class='title'>{{ $json.postTitle.replace(/'/g, \\\"'\\\") }}</div><div class='author'>Abdullah Tariq &bull; AI Automation Engineer</div><div class='tools'>Vapi &bull; Retell AI &bull; n8n &bull; LangChain</div></div>\",\n  \"css\": \"body{margin:0;font-family:'Segoe UI',sans-serif;background:#07090f}.card{width:800px;height:418px;background:linear-gradient(135deg,#07090f,#0d1117);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px;box-sizing:border-box;position:relative;border:1px solid rgba(37,99,235,0.3)}.card::before{content:'';position:absolute;inset:0;background-image:linear-gradient(rgba(37,99,235,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(37,99,235,.07) 1px,transparent 1px);background-size:50px 50px}.badge{background:rgba(37,99,235,.15);border:1px solid rgba(37,99,235,.4);border-radius:100px;padding:8px 20px;font-size:13px;color:#60a5fa;font-weight:600;margin-bottom:24px;position:relative;z-index:1}.title{font-size:36px;font-weight:800;color:#fff;text-align:center;line-height:1.2;margin-bottom:28px;position:relative;z-index:1;max-width:680px}.author{font-size:16px;color:#64748b;margin-bottom:12px;position:relative;z-index:1}.tools{font-size:13px;color:#334155;position:relative;z-index:1}\",\n  \"viewport_width\": 800,\n  \"viewport_height\": 418\n}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "a1b2c3d4-0013-4000-8000-000000000013",
+      "name": "Generate Post Image",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2640, 200],
+      "onError": "continueErrorOutput",
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "REPLACE_WITH_HCTI_CREDENTIAL_ID",
+          "name": "HCTI Basic Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combine post content with image URL\n// Handles case where image generation failed\n\nconst postData = $('Parse Post Content').item.json;\nlet imageUrl = '';\n\ntry {\n  const imageResponse = $('Generate Post Image').item.json;\n  imageUrl = imageResponse.url || '';\n  if (imageUrl) {\n    console.log(`Image generated: ${imageUrl}`);\n  }\n} catch(e) {\n  console.log('Image generation skipped or failed — posting text only');\n}\n\nreturn [{\n  json: {\n    ...postData,\n    imageUrl,\n    hasImage: !!imageUrl\n  }\n}];"
+      },
+      "id": "a1b2c3d4-0014-4000-8000-000000000014",
+      "name": "Combine Post and Image",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2860, 300]
+    },
+    {
+      "parameters": {
+        "person": "={{ $json.linkedInPersonUrn }}",
+        "text": "={{ $json.postContent }}",
+        "additionalFields": {}
+      },
+      "id": "a1b2c3d4-0015-4000-8000-000000000015",
+      "name": "Post to LinkedIn",
+      "type": "n8n-nodes-base.linkedIn",
+      "typeVersion": 1,
+      "position": [3080, 180],
+      "onError": "continueErrorOutput",
+      "credentials": {
+        "linkedInOAuth2Api": {
+          "id": "REPLACE_WITH_LINKEDIN_CREDENTIAL_ID",
+          "name": "LinkedIn OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "abdtariq3274@gmail.com",
+        "subject": "=[Contra Post - {{ $('Combine Post and Image').item.json.dayName }}] {{ $('Combine Post and Image').item.json.postTitle }}",
+        "message": "=<h2>Your Contra Post for Today</h2>\n<p><strong>Date:</strong> {{ $('Combine Post and Image').item.json.dateStr }}</p>\n<p><strong>Category:</strong> {{ $('Combine Post and Image').item.json.category }}</p>\n<p><strong>Based on idea:</strong> {{ $('Combine Post and Image').item.json.ideaTitle }}</p>\n\n<hr>\n\n<h3>Post Content (copy this to Contra):</h3>\n<div style=\"background:#f5f5f5;padding:20px;border-radius:8px;white-space:pre-wrap;font-family:sans-serif;line-height:1.6\">{{ $('Combine Post and Image').item.json.postContent }}</div>\n\n<hr>\n\n{{ $('Combine Post and Image').item.json.hasImage ? '<h3>Post Image:</h3><p>Download and attach to your Contra post:</p><p><a href=\"' + $('Combine Post and Image').item.json.imageUrl + '\">Click to download image</a></p><br><img src=\"' + $('Combine Post and Image').item.json.imageUrl + '\" style=\"max-width:600px;border-radius:8px\" />' : '<p><em>No image generated today.</em></p>' }}\n\n<hr>\n<p style=\"color:#666;font-size:12px\">This post was also automatically posted to LinkedIn. Go post this on Contra now — takes 30 seconds.</p>",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "a1b2c3d4-0016-4000-8000-000000000016",
+      "name": "Send Contra Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [3080, 420],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "REPLACE_WITH_GMAIL_CREDENTIAL_ID",
+          "name": "Gmail OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check LinkedIn post result\nlet linkedInUrl = '';\nlet linkedInStatus = 'posted';\n\ntry {\n  const liResult = $('Post to LinkedIn').item.json;\n  // LinkedIn returns the post URN/ID\n  linkedInUrl = liResult.id ? `https://www.linkedin.com/feed/update/${liResult.id}` : '';\n} catch(e) {\n  linkedInStatus = 'failed';\n  console.log('LinkedIn post status check failed');\n}\n\nconst postData = $('Combine Post and Image').item.json;\n\nreturn [{\n  json: {\n    ...postData,\n    linkedInUrl,\n    linkedInStatus,\n    emailStatus: 'sent'\n  }\n}];"
+      },
+      "id": "a1b2c3d4-0017-4000-8000-000000000017",
+      "name": "Collect Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3300, 300]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1IwKjyPCJ0tGpFpRceUxQwGACf9Uk0IZoSsoXqJyAAjY",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "📝 Post Log",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date": "={{ $json.dateStr }}",
+            "Day": "={{ $json.dayName }}",
+            "Topic Category": "={{ $json.category }}",
+            "Post Title": "={{ $json.postTitle }}",
+            "Post Content (Full)": "={{ $json.postContent }}",
+            "Image URL": "={{ $json.imageUrl }}",
+            "Research Sources": "=Research via Tavily",
+            "LinkedIn Post URL": "={{ $json.linkedInUrl }}",
+            "LinkedIn Status": "={{ $json.linkedInStatus }}",
+            "Contra Status": "pending",
+            "Email Sent": "YES",
+            "Notes": "={{ $json.usingIdea ? 'Used idea: ' + $json.ideaTitle : 'Used topic rotation default' }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0018-4000-8000-000000000018",
+      "name": "Log to Post Log",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [3520, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_WITH_GSHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Update the used idea status in Content Ideas sheet\n// Only runs if we actually used an idea (not fallback)\n\nconst data = $('Collect Results').item.json;\n\nif (!data.usingIdea || !data.ideaRowNumber) {\n  console.log('No idea was selected — skipping status update');\n  return [{ json: { updated: false, reason: 'No idea used' } }];\n}\n\nconsole.log(`Will mark idea row ${data.ideaRowNumber} as Used`);\n\nreturn [{\n  json: {\n    updated: true,\n    ideaRowNumber: data.ideaRowNumber,\n    ideaTitle: data.ideaTitle,\n    dateStr: data.dateStr\n  }\n}];"
+      },
+      "id": "a1b2c3d4-0019-4000-8000-000000000019",
+      "name": "Prepare Idea Update",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3740, 300]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1IwKjyPCJ0tGpFpRceUxQwGACf9Uk0IZoSsoXqJyAAjY",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "💡 Content Ideas",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Status": "Used",
+            "Notes": "=Used on {{ $('Collect Results').item.json.dateStr }}"
+          }
+        },
+        "where": {
+          "values": [
+            {
+              "lookupColumn": "Idea Title",
+              "lookupValue": "={{ $('Collect Results').item.json.ideaTitle }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0020-4000-8000-000000000020",
+      "name": "Mark Idea As Used",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [3960, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_WITH_GSHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $('Collect Results').item.json;\nconsole.log(`\n=== WORKFLOW COMPLETE ===\nDate: ${data.dateStr}\nCategory: ${data.category}\nPost: ${data.postTitle}\nLinkedIn: ${data.linkedInStatus}\nEmail: sent to abdtariq3274@gmail.com\nImage: ${data.hasImage ? data.imageUrl : 'none'}\n========================\n`);\n\nreturn [{ json: { status: 'success', ...data } }];"
+      },
+      "id": "a1b2c3d4-0021-4000-8000-000000000021",
+      "name": "Workflow Success",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [4180, 300]
+    },
+    {
+      "parameters": {},
+      "id": "a1b2c3d4-0022-4000-8000-000000000022",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [0, 600]
+    },
+    {
+      "parameters": {
+        "sendTo": "abdtariq3274@gmail.com",
+        "subject": "[WORKFLOW ERROR] Daily Post Failed - {{ $json.execution.id }}",
+        "message": "=<h2>Daily Post Workflow Failed</h2>\n\n<p><strong>Time:</strong> {{ new Date().toISOString() }}</p>\n<p><strong>Execution ID:</strong> {{ $json.execution.id }}</p>\n<p><strong>Workflow:</strong> {{ $json.workflow.name }}</p>\n\n<h3>Error Details:</h3>\n<pre style=\"background:#fff3f3;padding:15px;border-radius:5px\">{{ $json.execution.error.message }}</pre>\n\n<h3>Failed Node:</h3>\n<p>{{ $json.execution.lastNodeExecuted }}</p>\n\n<p style=\"color:#666;font-size:12px\">Check your n8n instance to debug. The workflow did not post today.</p>",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "a1b2c3d4-0023-4000-8000-000000000023",
+      "name": "Email Error Alert",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [220, 600],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "REPLACE_WITH_GMAIL_CREDENTIAL_ID",
+          "name": "Gmail OAuth2"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Daily Schedule 8am": {
+      "main": [
+        [{ "node": "Calculate Random Delay", "type": "main", "index": 0 }]
+      ]
+    },
+    "Calculate Random Delay": {
+      "main": [
+        [{ "node": "Wait Random Time", "type": "main", "index": 0 }]
+      ]
+    },
+    "Wait Random Time": {
+      "main": [
+        [{ "node": "Get Current Day", "type": "main", "index": 0 }]
+      ]
+    },
+    "Get Current Day": {
+      "main": [
+        [{ "node": "Read Topic Rotation", "type": "main", "index": 0 }]
+      ]
+    },
+    "Read Topic Rotation": {
+      "main": [
+        [{ "node": "Find Todays Topic", "type": "main", "index": 0 }]
+      ]
+    },
+    "Find Todays Topic": {
+      "main": [
+        [{ "node": "Read Content Ideas", "type": "main", "index": 0 }]
+      ]
+    },
+    "Read Content Ideas": {
+      "main": [
+        [{ "node": "Select Best Idea", "type": "main", "index": 0 }]
+      ]
+    },
+    "Select Best Idea": {
+      "main": [
+        [{ "node": "Tavily Research", "type": "main", "index": 0 }]
+      ]
+    },
+    "Tavily Research": {
+      "main": [
+        [{ "node": "Build Claude Prompt", "type": "main", "index": 0 }]
+      ],
+      "error": [
+        [{ "node": "Build Claude Prompt", "type": "main", "index": 0 }]
+      ]
+    },
+    "Build Claude Prompt": {
+      "main": [
+        [{ "node": "Claude Generate Post", "type": "main", "index": 0 }]
+      ]
+    },
+    "Claude Generate Post": {
+      "main": [
+        [{ "node": "Parse Post Content", "type": "main", "index": 0 }]
+      ]
+    },
+    "Parse Post Content": {
+      "main": [
+        [{ "node": "Generate Post Image", "type": "main", "index": 0 }]
+      ]
+    },
+    "Generate Post Image": {
+      "main": [
+        [{ "node": "Combine Post and Image", "type": "main", "index": 0 }]
+      ],
+      "error": [
+        [{ "node": "Combine Post and Image", "type": "main", "index": 0 }]
+      ]
+    },
+    "Combine Post and Image": {
+      "main": [
+        [
+          { "node": "Post to LinkedIn", "type": "main", "index": 0 },
+          { "node": "Send Contra Email", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Post to LinkedIn": {
+      "main": [
+        [{ "node": "Collect Results", "type": "main", "index": 0 }]
+      ],
+      "error": [
+        [{ "node": "Collect Results", "type": "main", "index": 0 }]
+      ]
+    },
+    "Send Contra Email": {
+      "main": [
+        [{ "node": "Collect Results", "type": "main", "index": 0 }]
+      ]
+    },
+    "Collect Results": {
+      "main": [
+        [{ "node": "Log to Post Log", "type": "main", "index": 0 }]
+      ]
+    },
+    "Log to Post Log": {
+      "main": [
+        [{ "node": "Prepare Idea Update", "type": "main", "index": 0 }]
+      ]
+    },
+    "Prepare Idea Update": {
+      "main": [
+        [{ "node": "Mark Idea As Used", "type": "main", "index": 0 }]
+      ]
+    },
+    "Mark Idea As Used": {
+      "main": [
+        [{ "node": "Workflow Success", "type": "main", "index": 0 }]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [{ "node": "Email Error Alert", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "errorWorkflow": ""
+  },
+  "id": "daily-post-workflow-001"
+}

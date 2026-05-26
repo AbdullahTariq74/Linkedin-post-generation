@@ -1,0 +1,160 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 10 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "2c17bb42-ce21-4b6d-bee6-10ddb83f87ec",
+      "name": "Every Monday 10am",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "documentId": {
+          "__rl": true,
+          "value": "1IwKjyPCJ0tGpFpRceUxQwGACf9Uk0IZoSsoXqJyAAjY",
+          "mode": "list",
+          "cachedResultName": "Posts",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1IwKjyPCJ0tGpFpRceUxQwGACf9Uk0IZoSsoXqJyAAjY/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1396108823,
+          "mode": "list",
+          "cachedResultName": "📝 Post Log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1IwKjyPCJ0tGpFpRceUxQwGACf9Uk0IZoSsoXqJyAAjY/edit#gid=1396108823"
+        },
+        "options": {}
+      },
+      "id": "40e38cba-1d43-426b-bcd9-4888da89ba83",
+      "name": "Read Post Log",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [
+        224,
+        0
+      ],
+      "credentials": {
+        "googleApi": {
+          "id": "IsKwAiku6jrE5n03",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get posts from last 7 days that have LinkedIn URLs\nconst rows = $input.all();\nconst sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);\n\nconst recentPosts = rows.filter(row => {\n  const postDate = new Date(row.json['Date']);\n  const hasUrl = row.json['LinkedIn Post URL'] && \n                 String(row.json['LinkedIn Post URL']).includes('linkedin.com');\n  return postDate >= sevenDaysAgo && hasUrl;\n});\n\nconsole.log(`Found ${recentPosts.length} LinkedIn posts from last 7 days`);\n\nif (recentPosts.length === 0) {\n  return [{ json: { noPosts: true, message: 'No LinkedIn posts found from last 7 days' } }];\n}\n\nreturn recentPosts.map(row => ({\n  json: {\n    date: row.json['Date'],\n    postTitle: row.json['Post Title'],\n    category: row.json['Topic Category'],\n    linkedInUrl: row.json['LinkedIn Post URL'],\n    linkedInStatus: row.json['LinkedIn Status']\n  }\n}));"
+      },
+      "id": "1de1ada8-e975-481c-ad96-c27c3e9f1ea2",
+      "name": "Filter Recent LinkedIn Posts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "abdtariq3274@gmail.com",
+        "subject": "[Weekly Review] Update your LinkedIn Analytics in Google Sheets",
+        "message": "=<h2>Weekly LinkedIn Analytics Reminder</h2>\n\n<p>Hey Abdullah — time to log this week's LinkedIn post performance.</p>\n\n<p>Open your <a href=\"https://docs.google.com/spreadsheets/d/1IwKjyPCJ0tGpFpRceUxQwGACf9Uk0IZoSsoXqJyAAjY\">Google Sheet → 📊 LinkedIn Analytics tab</a> and fill in reactions, comments, and impressions for each post below.</p>\n\n<h3>Posts from this week:</h3>\n<table border='1' cellpadding='8' cellspacing='0' style='border-collapse:collapse;width:100%'>\n  <tr style='background:#f0f4ff'>\n    <th>Date</th><th>Title</th><th>Category</th><th>URL</th>\n  </tr>\n  {{ $input.all().filter(i => !i.json.noPosts).map(i => `<tr><td>${i.json.date}</td><td>${i.json.postTitle}</td><td>${i.json.category}</td><td><a href='${i.json.linkedInUrl}'>View Post</a></td></tr>`).join('') }}\n</table>\n\n<br>\n<p>Tracking which topics get the most reactions helps you post more of what works.</p>\n<p style='color:#666;font-size:12px'>Sent automatically every Monday by your n8n workflow.</p>",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "07137558-f44d-4ae9-9753-818ed2b7e6b1",
+      "name": "Send Analytics Reminder Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        672,
+        0
+      ],
+      "webhookId": "dce2e463-385b-412c-8147-b4bfa1ed0916",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "Y9KIuO9pMES0OtnB",
+          "name": "Gmail--Personal"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "console.log('Weekly analytics reminder sent successfully');\nreturn [{ json: { status: 'done', timestamp: new Date().toISOString() } }];"
+      },
+      "id": "9f3fccdf-ddbe-4ae8-82cd-a04b1a2c06c0",
+      "name": "Done",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Every Monday 10am": {
+      "main": [
+        [
+          {
+            "node": "Read Post Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Post Log": {
+      "main": [
+        [
+          {
+            "node": "Filter Recent LinkedIn Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Recent LinkedIn Posts": {
+      "main": [
+        [
+          {
+            "node": "Send Analytics Reminder Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Analytics Reminder Email": {
+      "main": [
+        [
+          {
+            "node": "Done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "dd83febdae1d0555ff837dc20a7067f4e2c85eff11f39a6dee363ef07f457546"
+  }
+}

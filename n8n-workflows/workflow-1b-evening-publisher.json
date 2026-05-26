@@ -1,0 +1,470 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 18 * * *"
+            }
+          ]
+        }
+      },
+      "id": "96979e90-0c17-4166-8a8d-08e248e90508",
+      "name": "Daily Schedule 6pm",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        176,
+        -112
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "getRows",
+        "documentId": {
+          "__rl": true,
+          "value": "1IwKjyPCJ0tGpFpRceUxQwGACf9Uk0IZoSsoXqJyAAjY",
+          "mode": "list",
+          "cachedResultName": "Posts",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1IwKjyPCJ0tGpFpRceUxQwGACf9Uk0IZoSsoXqJyAAjY/edit?usp=drivesdk"
+        }
+      },
+      "id": "3981b827-aaf7-472e-b410-8712f2738518",
+      "name": "Read Post Log",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [
+        400,
+        -112
+      ],
+      "credentials": {
+        "googleApi": {
+          "id": "IsKwAiku6jrE5n03",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Find today's post with Status='ready'\nconst today = new Date().toISOString().split('T')[0];\nconst rows = $input.all();\n\nconst readyPost = rows.find(r => {\n  const rowDate = String(r.json['Date'] || '').trim();\n  const status = String(r.json['Status'] || '').trim().toLowerCase();\n  return rowDate === today && status === 'ready';\n});\n\nif (!readyPost) {\n  console.log(`No post with Status='ready' found for ${today}. Nothing to send.`);\n  return [{ json: { skip: true, reason: `No approved post for ${today}`, date: today } }];\n}\n\nconsole.log(`Ready post found: \"${readyPost.json['Post Title']}\"`);\nreturn [{ json: {\n  skip: false,\n  date: readyPost.json['Date'],\n  dayName: readyPost.json['Day'] || '',\n  title: readyPost.json['Post Title'],\n  linkedInPost: readyPost.json['Post Content (Full)'],\n  contraPost: readyPost.json['Contra Post Content'] || readyPost.json['Post Content (Full)'],\n  imageUrl: readyPost.json['Image URL'] || '',\n  category: readyPost.json['Topic Category'] || ''\n}}];"
+      },
+      "id": "1e6cf142-c67f-49c1-9397-af57eace73f4",
+      "name": "Find Ready Post",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        -112
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "skip-check",
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "34b72509-d2c6-47e5-b1d6-5317a9e08537",
+      "name": "Has Ready Post?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        848,
+        -112
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "console.log('No approved post today — evening publisher skipping silently.');\nreturn [{ json: { status: 'skipped', reason: $input.first().json.reason } }];"
+      },
+      "id": "e926859d-7829-4bd0-bbd4-3bba58410fd5",
+      "name": "Skip Silently",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1056,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "abdtariq3274@gmail.com",
+        "subject": "=Post Ready to Publish — {{ $json.title }}",
+        "message": "=<div style=\"font-family: Arial, sans-serif; max-width: 720px; margin: 0 auto; padding: 24px; color: #111;\">\n\n<h2 style=\"color: #1a1f3a; border-bottom: 3px solid #6366f1; padding-bottom: 10px;\">Today's Posts Are Ready to Publish</h2>\n\n<table style=\"width:100%; margin-bottom: 20px;\">\n  <tr><td style=\"color:#6b7280; width:120px; padding: 4px 0;\"><strong>Date:</strong></td><td>{{ $json.date }}</td></tr>\n  <tr><td style=\"color:#6b7280; padding: 4px 0;\"><strong>Day:</strong></td><td>{{ $json.dayName }}</td></tr>\n  <tr><td style=\"color:#6b7280; padding: 4px 0;\"><strong>Category:</strong></td><td>{{ $json.category }}</td></tr>\n</table>\n\n{{ $json.imageUrl ? '<img src=\"' + $json.imageUrl + '\" style=\"width:100%; max-width:640px; border-radius:8px; margin-bottom:24px; display:block;\" />' : '' }}\n\n<hr style=\"border: 1px solid #e5e7eb; margin: 24px 0;\">\n\n<h3 style=\"color: #4f46e5; margin-bottom: 6px;\">LinkedIn Post</h3>\n<p style=\"color: #9ca3af; font-size: 13px; margin: 0 0 12px 0;\">Go to <a href=\"https://www.linkedin.com/feed/\" style=\"color:#4f46e5;\">linkedin.com/feed</a> → Start a post → paste this → add image if you want</p>\n<div style=\"background: #f5f3ff; border-left: 4px solid #6366f1; padding: 20px; border-radius: 4px; white-space: pre-line; font-size: 15px; line-height: 1.7;\">\n{{ $json.linkedInPost }}\n</div>\n\n<hr style=\"border: 1px solid #e5e7eb; margin: 24px 0;\">\n\n<h3 style=\"color: #059669; margin-bottom: 6px;\">Contra Post</h3>\n<p style=\"color: #9ca3af; font-size: 13px; margin: 0 0 12px 0;\">Go to <a href=\"https://contra.com\" style=\"color:#059669;\">contra.com</a> → your profile → Create Post → paste this</p>\n<div style=\"background: #f0fdf4; border-left: 4px solid #10b981; padding: 20px; border-radius: 4px; white-space: pre-line; font-size: 15px; line-height: 1.7;\">\n{{ $json.contraPost }}\n</div>\n\n<hr style=\"border: 1px solid #e5e7eb; margin: 24px 0;\">\n\n<div style=\"background: #f3f4f6; border-radius: 8px; padding: 16px; font-size: 14px;\">\n  <strong>After you post:</strong><br>\n  Open <a href=\"https://docs.google.com/spreadsheets/d/1IwKjyPCJ0tGpFpRceUxQwGACf9Uk0IZoSsoXqJyAAjY\">Google Sheets → Post Log</a> and change Status from <code>ready</code> → <code>posted</code>. You can also paste the LinkedIn post URL in the \"LinkedIn Post URL\" column.\n</div>\n\n<p style=\"color: #d1d5db; font-size: 11px; margin-top: 30px;\">Sent by your n8n evening workflow · Trilles AI</p>\n</div>",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "e8293267-8ade-4792-a7da-3ed43ba166e1",
+      "name": "Send Posts Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1056,
+        -112
+      ],
+      "webhookId": "53b0dfa6-b8e5-442f-95c8-5ded314a6c10",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "Y9KIuO9pMES0OtnB",
+          "name": "Gmail--Personal"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1IwKjyPCJ0tGpFpRceUxQwGACf9Uk0IZoSsoXqJyAAjY",
+          "mode": "list",
+          "cachedResultName": "Posts",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1IwKjyPCJ0tGpFpRceUxQwGACf9Uk0IZoSsoXqJyAAjY/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "📝 Post Log",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date": "={{ $('Find Ready Post').first().json.date }}",
+            "Status": "sent",
+            "LinkedIn Status": "pending-manual",
+            "Contra Status": "emailed",
+            "row_number": 0
+          },
+          "matchingColumns": [
+            "Date"
+          ],
+          "schema": [
+            {
+              "id": "Date",
+              "displayName": "Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Day",
+              "displayName": "Day",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Topic Category",
+              "displayName": "Topic Category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Post Title",
+              "displayName": "Post Title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Post Content (Full)",
+              "displayName": "Post Content (Full)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Contra Post Content",
+              "displayName": "Contra Post Content",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Image URL",
+              "displayName": "Image URL",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Research Sources",
+              "displayName": "Research Sources",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "LinkedIn Post URL",
+              "displayName": "LinkedIn Post URL",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "LinkedIn Status",
+              "displayName": "LinkedIn Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Contra Status",
+              "displayName": "Contra Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Email Sent",
+              "displayName": "Email Sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Notes",
+              "displayName": "Notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "2a5af1c7-0209-4c3f-ba86-84dd8acd4131",
+      "name": "Update Status to Sent",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [
+        1280,
+        -112
+      ],
+      "credentials": {
+        "googleApi": {
+          "id": "IsKwAiku6jrE5n03",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $('Find Ready Post').first().json;\nconsole.log(`Evening publisher done. Post \"${d.title}\" emailed for manual publishing. Status: sent.`);\nreturn [{ json: { status: 'done', date: d.date, title: d.title, note: 'Manual test mode — emails sent, user posts manually' } }];"
+      },
+      "id": "3ecccfc4-0c58-450d-99cc-93cfd51b8a74",
+      "name": "Done",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1504,
+        -112
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "de1352a4-c857-4a91-8280-5679aedcea65",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        176,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "abdtariq3274@gmail.com",
+        "subject": "=[ERROR] Evening Publisher Failed — {{ $json.execution.error.message.slice(0,60) }}",
+        "message": "=<h2 style=\"color:red;\">Evening workflow failed</h2>\n<p><strong>Error:</strong> {{ $json.execution.error.message }}</p>\n<p><strong>Node:</strong> {{ $json.execution.lastNode }}</p>\n<p><strong>Time:</strong> {{ $now.toISO() }}</p>\n<p>Check Google Sheets Post Log — post may still be in 'ready' status.</p>",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "72f25ddc-d4ae-4000-91c9-5d607559c3f8",
+      "name": "Error Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        400,
+        192
+      ],
+      "webhookId": "3fba05b4-8f30-4eae-986f-2aad2d28d4b9",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "Y9KIuO9pMES0OtnB",
+          "name": "Gmail--Personal"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Daily Schedule 6pm": {
+      "main": [
+        [
+          {
+            "node": "Read Post Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Post Log": {
+      "main": [
+        [
+          {
+            "node": "Find Ready Post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Ready Post": {
+      "main": [
+        [
+          {
+            "node": "Has Ready Post?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Ready Post?": {
+      "main": [
+        [
+          {
+            "node": "Send Posts Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip Silently",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Posts Email": {
+      "main": [
+        [
+          {
+            "node": "Update Status to Sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Status to Sent": {
+      "main": [
+        [
+          {
+            "node": "Done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Error Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "dd83febdae1d0555ff837dc20a7067f4e2c85eff11f39a6dee363ef07f457546"
+  }
+}
