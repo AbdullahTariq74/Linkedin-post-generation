@@ -1025,7 +1025,7 @@
           "parameters": [
             {
               "name": "Authorization",
-              "value": "Bearer 741437daf617e243442b83d1d3eafca1"
+              "value": "Bearer YOUR_KIE_AI_API_KEY"
             }
           ]
         },
@@ -1075,7 +1075,7 @@
           "parameters": [
             {
               "name": "Authorization",
-              "value": "Bearer 741437daf617e243442b83d1d3eafca1"
+              "value": "Bearer YOUR_KIE_AI_API_KEY"
             }
           ]
         },
